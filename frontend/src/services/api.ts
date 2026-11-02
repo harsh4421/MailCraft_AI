@@ -19,13 +19,22 @@ const getBaseUrl = (): string => {
     if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       return '/api';
     }
-    return '/api';
+    // Production default: connect directly to our live Render backend service
+    return 'https://mailcraft-backend-c087.onrender.com/api';
   }
 
   envUrl = String(envUrl).trim();
+
+  // If Render passed internal service name without TLD (e.g. "mailcraft-backend-c087")
+  if (!envUrl.includes('.') && !envUrl.startsWith('/')) {
+    envUrl = `${envUrl}.onrender.com`;
+  }
+
+  // Ensure protocol is present
   if (!envUrl.startsWith('http://') && !envUrl.startsWith('https://') && !envUrl.startsWith('/')) {
     envUrl = `https://${envUrl}`;
   }
+
   const trimmed = envUrl.replace(/\/$/, '');
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 };
