@@ -20,8 +20,8 @@ export const AppLayout: React.FC = () => {
     if (pathname.startsWith('/history')) return 'Email History & Logs';
     if (pathname.startsWith('/profile')) return 'User Profile';
     if (pathname.startsWith('/settings')) return 'Preferences & AI Settings';
-    if (pathname.startsWith('/about')) return 'About MailCraft AI';
-    if (pathname.startsWith('/help')) return 'Help Center & Documentation';
+    if (pathname.includes('/about')) return 'About MailCraft AI';
+    if (pathname.includes('/help')) return 'Help Center & Documentation';
     return 'MailCraft AI';
   };
 

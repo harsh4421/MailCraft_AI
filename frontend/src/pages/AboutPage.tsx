@@ -156,9 +156,9 @@ export const AboutPage: React.FC = () => {
               <span className="font-bold text-slate-800 dark:text-slate-200 block">Database & AI</span>
               <p className="text-slate-500">• PostgreSQL Relational DB</p>
               <p className="text-slate-500">• Prisma ORM Client</p>
-              <p className="text-slate-500">• Dual AI Provider Layer</p>
-              <p className="text-slate-500">• Deterministic Demo NLP</p>
-              <p className="text-slate-500">• Optional OpenAI GPT-4o-mini</p>
+              <p className="text-slate-500">• Google Gemini (Dynamic Flash & Pro)</p>
+              <p className="text-slate-500">• Multi-Provider (Groq & OpenAI)</p>
+              <p className="text-slate-500">• Zero-Setup Deterministic Demo Engine</p>
             </div>
           </div>
         </CardContent>

@@ -6,6 +6,7 @@ import { ToastProvider } from './components/ui/Toast';
 
 // Layout & Pages
 import { AppLayout } from './components/layout/AppLayout';
+import { PublicLayout } from './components/layout/PublicLayout';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -45,18 +46,34 @@ export const App: React.FC = () => {
         <ToastProvider>
           <BrowserRouter>
             <Routes>
-              {/* Public Marketing Routes */}
+              {/* Public Marketing & Documentation Routes (Navbar + Footer Layout) */}
               <Route path="/" element={<LandingPage />} />
+              <Route
+                path="/about"
+                element={
+                  <PublicLayout>
+                    <AboutPage />
+                  </PublicLayout>
+                }
+              />
+              <Route
+                path="/help"
+                element={
+                  <PublicLayout>
+                    <HelpPage />
+                  </PublicLayout>
+                }
+              />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
 
-              {/* App Shell Workspace Routes */}
+              {/* App Shell Workspace Routes (Sidebar + App Header Layout) */}
               <Route element={<AppLayout />}>
                 {/* Free exploration of core workspaces */}
                 <Route path="/draft" element={<DraftPage />} />
                 <Route path="/review" element={<ReviewPage />} />
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/help" element={<HelpPage />} />
+                <Route path="/app/about" element={<AboutPage />} />
+                <Route path="/app/help" element={<HelpPage />} />
 
                 {/* Authenticated Pages */}
                 <Route

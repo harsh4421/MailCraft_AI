@@ -33,8 +33,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { label: 'Email History', icon: <History className="w-4 h-4" />, path: '/history' },
     { label: 'User Profile', icon: <User className="w-4 h-4" />, path: '/profile' },
     { label: 'Settings', icon: <Settings className="w-4 h-4" />, path: '/settings' },
-    { label: 'About Project', icon: <Info className="w-4 h-4" />, path: '/about' },
-    { label: 'Help & Support', icon: <HelpCircle className="w-4 h-4" />, path: '/help' },
+    { label: 'About Project', icon: <Info className="w-4 h-4" />, path: '/app/about' },
+    { label: 'Help & Support', icon: <HelpCircle className="w-4 h-4" />, path: '/app/help' },
   ];
 
   const handleLogout = () => {
