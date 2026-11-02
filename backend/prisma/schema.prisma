@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String            @id @default(uuid())
+  email             String            @unique
+  passwordHash      String
+  fullName          String
+  jobTitle          String?
+  defaultSenderName String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  settings          UserSettings?
+  drafts            EmailDraft[]
+  reviews           EmailReview[]
+  generations       EmailGeneration[]
+
+  @@index([email])
+}
+
+model UserSettings {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme            String   @default("system")
+  defaultTone      String   @default("Professional")
+  defaultRecipient String   @default("Colleague")
+  defaultLength    String   @default("Medium")
+  customApiKey     String?
+  useDemoMode      Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+}
+
+model EmailGeneration {
+  id                     String       @id @default(uuid())
+  userId                 String
+  user                   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipient              String
+  purpose                String
+  context                String       @db.Text
+  tone                   String
+  length                 String
+  senderName             String
+  additionalInstructions String?      @db.Text
+  subject                String
+  greeting               String
+  body                   String       @db.Text
+  closing                String
+  isDemoMode             Boolean      @default(false)
+  aiModel                String       @default("demo-engine")
+  createdAt              DateTime     @default(now())
+
+  drafts                 EmailDraft[]
+
+  @@index([userId, createdAt])
+}
+
+model EmailDraft {
+  id           String           @id @default(uuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generationId String?
+  generation   EmailGeneration? @relation(fields: [generationId], references: [id], onDelete: SetNull)
+  title        String
+  subject      String
+  recipient    String
+  purpose      String
+  context      String?          @db.Text
+  tone         String
+  body         String           @db.Text
+  tags         String[]         @default([])
+  isPinned     Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([userId, updatedAt])
+  @@index([userId, recipient])
+  @@index([userId, purpose])
+}
+
+model EmailReview {
+  id                   String   @id @default(uuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalEmail        String   @db.Text
+  recipient            String
+  purpose              String
+  context              String?  @db.Text
+  desiredTone          String
+  overallScore         Int
+  grammarScore         Int
+  professionalismScore Int
+  contextScore         Int
+  toneScore            Int
+  clarityScore         Int
+  identifiedMistakes   Json
+  suggestions          Json
+  improvedEmail        String   @db.Text
+  isDemoMode           Boolean  @default(false)
+  aiModel              String   @default("demo-engine")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}

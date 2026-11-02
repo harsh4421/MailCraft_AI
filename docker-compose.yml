@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mailcraft_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: mailcraft_user
+      POSTGRES_PASSWORD: mailcraft_password
+      POSTGRES_DB: mailcraft_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mailcraft_backend
+    restart: always
+    environment:
+      PORT: 5005
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://mailcraft_user:mailcraft_password@postgres:5432/mailcraft_db"
+      JWT_SECRET: "mailcraft_production_jwt_secret_key_2026"
+      OPENAI_API_KEY: ""
+      GEMINI_API_KEY: ""
+      GROQ_API_KEY: ""
+    ports:
+      - "5005:5005"
+    depends_on:
+      - postgres
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mailcraft_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
