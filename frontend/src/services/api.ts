@@ -15,9 +15,20 @@ const getBaseUrl = (): string => {
   const customUrl = typeof window !== 'undefined' ? localStorage.getItem('mailcraft_api_url') : null;
   let envUrl = customUrl || (import.meta as any).env?.VITE_API_URL;
   
+  // If the literal documentation placeholder was entered, ignore it
+  if (envUrl && (String(envUrl).includes('your-backend-url') || String(envUrl).includes('YOUR_BACKEND_URL'))) {
+    envUrl = null;
+  }
+
   if (!envUrl) {
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      return '/api';
+    if (typeof window !== 'undefined') {
+      // On Vercel, the relative /api is automatically proxied by vercel.json rewrites
+      if (window.location.hostname.includes('vercel.app')) {
+        return '/api';
+      }
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return '/api';
+      }
     }
     // Production default: connect directly to our live Render backend service
     return 'https://mailcraft-backend-c087.onrender.com/api';
