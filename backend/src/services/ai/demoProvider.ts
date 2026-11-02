@@ -410,6 +410,16 @@ export class DemoAIProvider implements IAIProvider {
       suggestions.push('Ensure recipient contact details and subject line are finalized before dispatch.');
     }
 
+    const criteriaScores = {
+      clarity: Math.max(1, Math.min(5, Math.round(clarityScore / 20))),
+      toneMatch: Math.max(1, Math.min(5, Math.round(toneScore / 20))),
+      completeness: Math.max(1, Math.min(5, Math.round(contextScore / 20))),
+      conciseness: Math.max(1, Math.min(5, Math.round(((clarityScore + contextScore) / 2) / 20))),
+      grammar: Math.max(1, Math.min(5, Math.round(grammarScore / 20))),
+      professionalism: Math.max(1, Math.min(5, Math.round(professionalismScore / 20))),
+      actionability: Math.max(1, Math.min(5, Math.round(((professionalismScore + contextScore) / 2) / 20))),
+    };
+
     return {
       overallScore,
       grammarScore,
@@ -417,6 +427,7 @@ export class DemoAIProvider implements IAIProvider {
       contextScore,
       toneScore,
       clarityScore,
+      criteriaScores,
       detectedTone,
       identifiedMistakes: mistakes,
       suggestions,

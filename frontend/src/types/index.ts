@@ -15,6 +15,7 @@ export interface UserSettings {
   defaultRecipient: string;
   defaultLength: string;
   customApiKey?: string | null;
+  selectedModel?: string | null;
   useDemoMode: boolean;
 }
 
@@ -48,6 +49,16 @@ export interface IdentifiedMistake {
   severity: 'low' | 'medium' | 'high';
 }
 
+export interface ReviewCriteriaScores {
+  clarity: number;         // 1-5
+  toneMatch: number;       // 1-5
+  completeness: number;    // 1-5
+  conciseness: number;     // 1-5
+  grammar: number;         // 1-5
+  professionalism: number; // 1-5
+  actionability: number;   // 1-5
+}
+
 export interface ReviewEmailParams {
   originalEmail: string;
   recipient: string;
@@ -64,6 +75,7 @@ export interface ReviewEmailResult {
   contextScore: number;
   toneScore: number;
   clarityScore: number;
+  criteriaScores?: ReviewCriteriaScores;
   detectedTone: string;
   identifiedMistakes: IdentifiedMistake[];
   suggestions: string[];

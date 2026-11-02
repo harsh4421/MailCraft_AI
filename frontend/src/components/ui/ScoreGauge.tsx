@@ -111,3 +111,31 @@ export const ScoreProgressBar: React.FC<{
     </div>
   );
 };
+
+export const CriteriaRatingBar: React.FC<{
+  label: string;
+  rating: number; // 1 to 5 scale
+  colorClass?: string;
+}> = ({ label, rating, colorClass = 'bg-brand-600' }) => {
+  const clamped = Math.max(1, Math.min(5, Math.round(rating)));
+  const percentage = (clamped / 5) * 100;
+  return (
+    <div className="w-full space-y-1">
+      <div className="flex justify-between items-center text-xs">
+        <span className="font-semibold text-slate-700 dark:text-slate-300">{label}</span>
+        <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-slate-100">
+          <span className="text-amber-500 text-[11px]">{'★'.repeat(clamped)}{'☆'.repeat(5 - clamped)}</span>
+          <span className="font-mono text-[11px]">{clamped}/5</span>
+        </div>
+      </div>
+      <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+          className={`h-full rounded-full ${colorClass}`}
+        />
+      </div>
+    </div>
+  );
+};

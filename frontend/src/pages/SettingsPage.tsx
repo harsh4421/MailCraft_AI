@@ -1,28 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Settings,
-  Sparkles,
-  Sliders,
-  Key,
-  Shield,
-  Sun,
-  Moon,
-  Laptop,
-  Save,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
-  Loader2,
-} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { useToast } from '../components/ui/Toast';
 import { authApi } from '../services/api';
+import { Card, CardHeader, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { useToast } from '../components/ui/Toast';
+import {
+  Settings,
+  Key,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  Sparkles,
+  Sliders,
+  Moon,
+  Sun,
+  Loader2,
+  Cpu,
+} from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const { user, updateUser } = useAuth();
@@ -33,12 +32,20 @@ export const SettingsPage: React.FC = () => {
   const [defaultRecipient, setDefaultRecipient] = useState(user?.settings?.defaultRecipient || 'Professor');
   const [defaultLength, setDefaultLength] = useState(user?.settings?.defaultLength || 'Medium');
   const [customApiKey, setCustomApiKey] = useState(user?.settings?.customApiKey || '');
+  const [selectedModel, setSelectedModel] = useState(user?.settings?.selectedModel || '');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [useDemoMode, setUseDemoMode] = useState(user?.settings?.useDemoMode ?? false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Key testing state
   const [isTestingKey, setIsTestingKey] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; provider?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+    stage?: string;
+    provider?: string;
+    activeModel?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (user?.settings) {
@@ -46,9 +53,29 @@ export const SettingsPage: React.FC = () => {
       setDefaultRecipient(user.settings.defaultRecipient);
       setDefaultLength(user.settings.defaultLength);
       setCustomApiKey(user.settings.customApiKey || '');
+      setSelectedModel(user.settings.selectedModel || '');
       setUseDemoMode(user.settings.useDemoMode);
     }
   }, [user]);
+
+  // Load available models if user has a configured key
+  useEffect(() => {
+    if (user?.settings?.customApiKey && user.settings.customApiKey.length > 5) {
+      authApi
+        .getGeminiModels()
+        .then((res) => {
+          if (res.models && res.models.length > 0) {
+            setAvailableModels(res.models);
+            if (!user.settings?.selectedModel) {
+              setSelectedModel(res.defaultModel);
+            }
+          }
+        })
+        .catch(() => {
+          // Ignore background fetch error
+        });
+    }
+  }, [user?.settings?.customApiKey]);
 
   const handleTestKey = async () => {
     if (!customApiKey || customApiKey.trim().length < 5) {
@@ -64,13 +91,24 @@ export const SettingsPage: React.FC = () => {
         success: true,
         message: res.message || 'API key verified successfully!',
         provider: res.provider,
+        activeModel: res.activeModel,
       });
+
+      if (res.availableModels && res.availableModels.length > 0) {
+        setAvailableModels(res.availableModels);
+        if (!selectedModel || !res.availableModels.includes(selectedModel)) {
+          setSelectedModel(res.activeModel || res.availableModels[0]);
+        }
+      }
+
       toast.success(`Verified: ${res.provider} is active!`);
     } catch (err: any) {
       const errMsg = err.response?.data?.error || err.message || 'API key verification failed';
+      const stage = err.response?.data?.stage;
       setTestResult({
         success: false,
         message: errMsg,
+        stage,
       });
       toast.error(errMsg);
     } finally {
@@ -87,6 +125,7 @@ export const SettingsPage: React.FC = () => {
         defaultRecipient,
         defaultLength,
         customApiKey: customApiKey.trim() || undefined,
+        selectedModel: selectedModel || undefined,
         useDemoMode,
       });
 
@@ -109,7 +148,7 @@ export const SettingsPage: React.FC = () => {
           Application & AI Preferences
         </h2>
         <p className="text-xs text-slate-500">
-          Configure AI provider credentials, default drafting parameters, and visual theme.
+          Configure AI provider credentials, select Gemini models, customize drafting parameters, and visual theme.
         </p>
       </div>
 
@@ -122,7 +161,9 @@ export const SettingsPage: React.FC = () => {
               AI Intelligence Engine Configuration
             </span>
             <Badge variant={useDemoMode || !customApiKey ? 'warning' : 'success'} size="sm">
-              {useDemoMode || !customApiKey ? 'Demo Mode Fallback' : 'Live Cloud AI Active'}
+              {useDemoMode || !customApiKey
+                ? 'Demo Mode Fallback'
+                : `Live Cloud AI Active (${selectedModel || 'Auto'})`}
             </Badge>
           </CardHeader>
           <CardContent className="p-5 space-y-4">
@@ -132,19 +173,19 @@ export const SettingsPage: React.FC = () => {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
                 <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="font-bold text-brand-600 block">1. OpenAI</span>
-                  <p className="text-slate-400">Keys starting with <code>sk-...</code></p>
-                  <p className="text-[10px] text-slate-500 mt-1">GPT-4o-mini & GPT-4o</p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="font-bold text-emerald-600 block">2. Google Gemini</span>
+                  <span className="font-bold text-emerald-600 block">1. Google Gemini</span>
                   <p className="text-slate-400">Keys starting with <code>AQ...</code> or <code>AIza...</code></p>
-                  <p className="text-[10px] text-emerald-600 font-medium mt-1">Free Tier Available</p>
+                  <p className="text-[10px] text-emerald-600 font-medium mt-1">Free Tier • Dynamic Discovery</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                  <span className="font-bold text-sky-600 block">3. Groq (Llama 3.3)</span>
+                  <span className="font-bold text-sky-600 block">2. Groq (Llama 3.3)</span>
                   <p className="text-slate-400">Keys starting with <code>gsk_...</code></p>
                   <p className="text-[10px] text-sky-600 font-medium mt-1">Ultra-fast & 100% Free</p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <span className="font-bold text-brand-600 block">3. OpenAI</span>
+                  <p className="text-slate-400">Keys starting with <code>sk-...</code></p>
+                  <p className="text-[10px] text-slate-500 mt-1">Requires paid billing credits</p>
                 </div>
               </div>
             </div>
@@ -168,7 +209,7 @@ export const SettingsPage: React.FC = () => {
 
             <div className="space-y-2">
               <Input
-                label="AI Provider API Key (OpenAI / Gemini / Groq)"
+                label="AI Provider API Key (Google Gemini / Groq / OpenAI)"
                 type="password"
                 value={customApiKey}
                 onChange={(e) => {
@@ -177,7 +218,7 @@ export const SettingsPage: React.FC = () => {
                 }}
                 placeholder="AQ... / AIzaSy... / gsk_... / sk-..."
                 icon={<Key className="w-4 h-4" />}
-                hint="Stored securely in your private user profile in PostgreSQL."
+                hint="Stored securely encrypted with AES-256-GCM in PostgreSQL. Never logged or exposed."
               />
 
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -238,6 +279,7 @@ export const SettingsPage: React.FC = () => {
                     )}
                     <div>
                       <strong>{testResult.success ? 'Success:' : 'Verification Failed:'}</strong>{' '}
+                      {testResult.stage && <span className="opacity-75 font-mono text-[10px]">[{testResult.stage}] </span>}
                       {testResult.message}
                     </div>
                   </div>
@@ -246,13 +288,13 @@ export const SettingsPage: React.FC = () => {
                     <div className="mt-1 p-2.5 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-rose-200 dark:border-rose-900 text-slate-700 dark:text-slate-300 text-[11px] space-y-1">
                       <p className="font-semibold text-rose-600 dark:text-rose-400">💡 Recommended Solution:</p>
                       <p>
-                        OpenAI accounts require paid billing credits. To use live cloud AI immediately for free, obtain a free API key from{' '}
+                        OpenAI accounts require prepaid billing credits. You can get an instant free API key from{' '}
                         <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-emerald-600 underline font-medium">
                           Google AI Studio (Gemini)
                         </a>{' '}
                         or{' '}
                         <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-sky-600 underline font-medium">
-                          Groq Cloud (Llama 3.3)
+                          Groq Cloud
                         </a>
                         .
                       </p>
@@ -261,6 +303,32 @@ export const SettingsPage: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Task 5: Dynamic Gemini Model Selector */}
+            {availableModels.length > 0 && (
+              <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    Active Gemini Model
+                  </label>
+                  <Badge variant="brand" size="sm">
+                    Discovered via ListModels ({availableModels.length} compatible)
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Select which compatible Gemini model powers email drafting, quality reviews, and revisions.
+                </p>
+                <Select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  options={availableModels.map((m) => ({
+                    value: m,
+                    label: `${m}${m.includes('flash') ? ' ⭐ (Recommended - Fast & Free Tier)' : ''}`,
+                  }))}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -283,7 +351,7 @@ export const SettingsPage: React.FC = () => {
               label="Default Tone"
               value={defaultTone}
               onChange={(e) => setDefaultTone(e.target.value)}
-              options={['Professional', 'Formal', 'Friendly', 'Persuasive', 'Apologetic', 'Confident']}
+              options={['Professional', 'Formal', 'Casual', 'Urgent', 'Friendly', 'Assertive']}
             />
             <Select
               label="Default Length"
@@ -294,51 +362,52 @@ export const SettingsPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Theme Settings */}
+        {/* Appearance & Theme */}
         <Card>
           <CardHeader className="py-3 px-5 border-b border-slate-100 dark:border-slate-800">
             <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
               Visual Appearance
             </span>
           </CardHeader>
-          <CardContent className="p-5 flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => setTheme('light')}
-              className={`flex-1 p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-                theme === 'light'
-                  ? 'border-brand-600 bg-brand-50/50 text-brand-700 dark:bg-brand-950/40 shadow-xs'
-                  : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              <Sun className="w-5 h-5 text-amber-500" />
-              <span className="text-xs font-bold">Light Theme</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTheme('dark')}
-              className={`flex-1 p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${
-                theme === 'dark'
-                  ? 'border-brand-600 bg-brand-50/50 text-brand-700 dark:bg-brand-950/40 shadow-xs'
-                  : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              <Moon className="w-5 h-5 text-indigo-400" />
-              <span className="text-xs font-bold">Dark Theme</span>
-            </button>
+          <CardContent className="p-5">
+            <div className="grid grid-cols-2 gap-3 max-w-sm">
+              <button
+                type="button"
+                onClick={() => setTheme('light')}
+                className={`p-3 rounded-xl border flex flex-col items-center gap-2 text-xs font-medium transition-all ${
+                  theme === 'light'
+                    ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/20 text-brand-600 font-bold shadow-sm ring-2 ring-brand-500/20'
+                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <Sun className="w-5 h-5 text-amber-500" />
+                Light Theme
+              </button>
+              <button
+                type="button"
+                onClick={() => setTheme('dark')}
+                className={`p-3 rounded-xl border flex flex-col items-center gap-2 text-xs font-medium transition-all ${
+                  theme === 'dark'
+                    ? 'border-brand-600 bg-brand-50/50 dark:bg-brand-950/20 text-brand-600 font-bold shadow-sm ring-2 ring-brand-500/20'
+                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <Moon className="w-5 h-5 text-indigo-400" />
+                Dark Theme
+              </button>
+            </div>
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
+        {/* Save Actions */}
+        <div className="flex items-center justify-end gap-3 pt-2">
           <Button
             type="submit"
             variant="primary"
-            size="md"
             isLoading={isSaving}
-            icon={<Save className="w-4 h-4" />}
+            icon={<ShieldCheck className="w-4 h-4" />}
           >
-            Save All Preferences
+            Save Preferences & AI Settings
           </Button>
         </div>
       </form>

@@ -40,6 +40,16 @@ export interface IdentifiedMistake {
   severity: 'low' | 'medium' | 'high';
 }
 
+export interface ReviewCriteriaScores {
+  clarity: number;         // 1-5
+  toneMatch: number;       // 1-5
+  completeness: number;    // 1-5
+  conciseness: number;     // 1-5
+  grammar: number;         // 1-5
+  professionalism: number; // 1-5
+  actionability: number;   // 1-5
+}
+
 export interface ReviewEmailParams {
   originalEmail: string;
   recipient: string;
@@ -49,12 +59,13 @@ export interface ReviewEmailParams {
 }
 
 export interface ReviewEmailResult {
-  overallScore: number;
+  overallScore: number; // 0-100 scale
   grammarScore: number;
   professionalismScore: number;
   contextScore: number;
   toneScore: number;
   clarityScore: number;
+  criteriaScores: ReviewCriteriaScores; // 1-5 scale for the 7 core dimensions
   detectedTone: string;
   identifiedMistakes: IdentifiedMistake[];
   suggestions: string[];

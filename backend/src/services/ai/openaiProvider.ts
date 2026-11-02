@@ -218,13 +218,30 @@ ${params.originalEmail}
     if (!content) throw new Error('Empty response from OpenAI.');
     const parsed = JSON.parse(content);
 
+    const gScore = Number(parsed.grammarScore) || 85;
+    const pScore = Number(parsed.professionalismScore) || 80;
+    const cScore = Number(parsed.contextScore) || 80;
+    const tScore = Number(parsed.toneScore) || 80;
+    const clScore = Number(parsed.clarityScore) || 85;
+
+    const criteriaScores = {
+      clarity: Math.max(1, Math.min(5, Math.round(clScore / 20))),
+      toneMatch: Math.max(1, Math.min(5, Math.round(tScore / 20))),
+      completeness: Math.max(1, Math.min(5, Math.round(cScore / 20))),
+      conciseness: Math.max(1, Math.min(5, Math.round(((clScore + cScore) / 2) / 20))),
+      grammar: Math.max(1, Math.min(5, Math.round(gScore / 20))),
+      professionalism: Math.max(1, Math.min(5, Math.round(pScore / 20))),
+      actionability: Math.max(1, Math.min(5, Math.round(((pScore + cScore) / 2) / 20))),
+    };
+
     return {
       overallScore: Number(parsed.overallScore) || 80,
-      grammarScore: Number(parsed.grammarScore) || 85,
-      professionalismScore: Number(parsed.professionalismScore) || 80,
-      contextScore: Number(parsed.contextScore) || 80,
-      toneScore: Number(parsed.toneScore) || 80,
-      clarityScore: Number(parsed.clarityScore) || 85,
+      grammarScore: gScore,
+      professionalismScore: pScore,
+      contextScore: cScore,
+      toneScore: tScore,
+      clarityScore: clScore,
+      criteriaScores,
       detectedTone: parsed.detectedTone || 'Neutral',
       identifiedMistakes: Array.isArray(parsed.identifiedMistakes) ? parsed.identifiedMistakes : [],
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],

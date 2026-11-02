@@ -8,6 +8,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_SECRET: z.string().min(8, 'JWT_SECRET must be at least 8 characters long'),
+  ENCRYPTION_SECRET: z.string().optional().default(''),
+  GEMINI_API_KEY: z.string().optional().default(''),
   OPENAI_API_KEY: z.string().optional().default(''),
   CLIENT_URL: z.string().default('http://localhost:5173'),
 });

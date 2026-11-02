@@ -9,6 +9,7 @@ import {
 import { OpenAIProvider } from './openaiProvider';
 import { GeminiProvider } from './geminiProvider';
 import { DemoAIProvider } from './demoProvider';
+import { decryptApiKey } from '../../utils/encryption';
 import prisma from '../../config/prisma';
 
 export class AIService {
@@ -18,24 +19,29 @@ export class AIService {
     this.demoProvider = new DemoAIProvider();
   }
 
-  private resolveProviderFromKey(apiKey: string): { provider: IAIProvider; name: string } | null {
-    const key = apiKey.trim();
-    if (!key || key.length < 5) return null;
+  private resolveProviderFromKey(
+    apiKey: string,
+    preferredModel?: string | null
+  ): { provider: IAIProvider; name: string } | null {
+    const rawKey = decryptApiKey(apiKey).trim();
+    if (!rawKey || rawKey.length < 5) return null;
 
     // Detect Google Gemini (supports both legacy AIza... and new AQ. format)
-    if (key.startsWith('AIza') || key.startsWith('AQ.') || key.startsWith('AQ') || process.env.GEMINI_API_KEY === key) {
-      const gemini = new GeminiProvider(key);
-      if (gemini.isAvailable()) return { provider: gemini, name: 'Google Gemini' };
+    if (rawKey.startsWith('AIza') || rawKey.startsWith('AQ.') || rawKey.startsWith('AQ') || process.env.GEMINI_API_KEY === rawKey) {
+      const gemini = new GeminiProvider(rawKey, preferredModel || undefined);
+      if (gemini.isAvailable()) {
+        return { provider: gemini, name: `Google Gemini (${preferredModel || 'Dynamic Auto'})` };
+      }
     }
 
     // Detect Groq
-    if (key.startsWith('gsk_') || process.env.GROQ_API_KEY === key) {
-      const groq = new OpenAIProvider(key, 'llama-3.3-70b-versatile');
+    if (rawKey.startsWith('gsk_') || process.env.GROQ_API_KEY === rawKey) {
+      const groq = new OpenAIProvider(rawKey, 'llama-3.3-70b-versatile');
       return { provider: groq, name: 'Groq (Llama 3.3 70B)' };
     }
 
     // Default to OpenAI / OpenAI compatible
-    const openAI = new OpenAIProvider(key, 'gpt-4o-mini');
+    const openAI = new OpenAIProvider(rawKey, 'gpt-4o-mini');
     if (openAI.isAvailable()) {
       return { provider: openAI, name: 'OpenAI GPT-4o-mini' };
     }
@@ -43,7 +49,9 @@ export class AIService {
     return null;
   }
 
-  private async getProviderForUser(userId?: string): Promise<{ provider: IAIProvider; isDemo: boolean; modelName: string }> {
+  private async getProviderForUser(
+    userId?: string
+  ): Promise<{ provider: IAIProvider; isDemo: boolean; modelName: string }> {
     // 1. Check if user configured a key in UserSettings
     if (userId) {
       const settings = await prisma.userSettings.findUnique({ where: { userId } });
@@ -52,7 +60,7 @@ export class AIService {
       }
 
       if (settings?.customApiKey && settings.customApiKey.trim().length > 5) {
-        const resolved = this.resolveProviderFromKey(settings.customApiKey);
+        const resolved = this.resolveProviderFromKey(settings.customApiKey, settings.selectedModel);
         if (resolved) {
           return { provider: resolved.provider, isDemo: false, modelName: resolved.name };
         }
@@ -63,7 +71,7 @@ export class AIService {
     if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 5) {
       const gemini = new GeminiProvider(process.env.GEMINI_API_KEY);
       if (gemini.isAvailable()) {
-        return { provider: gemini, isDemo: false, modelName: 'Google Gemini' };
+        return { provider: gemini, isDemo: false, modelName: 'Google Gemini (Live API)' };
       }
     }
 
@@ -87,19 +95,23 @@ export class AIService {
     activeProvider: string;
     isDemoMode: boolean;
     hasCustomKey: boolean;
+    selectedModel?: string | null;
   }> {
     const { isDemo, modelName } = await this.getProviderForUser(userId);
 
     let hasCustomKey = false;
+    let selectedModel: string | null = null;
     if (userId) {
       const settings = await prisma.userSettings.findUnique({ where: { userId } });
       hasCustomKey = !!(settings?.customApiKey && settings.customApiKey.trim().length > 5);
+      selectedModel = settings?.selectedModel || null;
     }
 
     return {
       activeProvider: modelName,
       isDemoMode: isDemo,
       hasCustomKey,
+      selectedModel,
     };
   }
 
@@ -109,7 +121,7 @@ export class AIService {
       const result = await provider.draftEmail(params);
       return {
         ...result,
-        aiModel: modelName,
+        aiModel: result.aiModel || modelName,
       };
     } catch (error: any) {
       console.warn(`[AIService] Provider ${modelName} failed (${error.message}). Falling back to Demo Engine.`);
@@ -137,7 +149,7 @@ export class AIService {
       const result = await provider.reviewEmail(params);
       return {
         ...result,
-        aiModel: modelName,
+        aiModel: result.aiModel || modelName,
       };
     } catch (error: any) {
       console.warn(`[AIService] Review provider failed (${error.message}). Falling back to Demo Engine.`);

@@ -2,6 +2,15 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/prisma';
 import { env } from '../config/env';
+import { encryptApiKey, maskApiKey } from '../utils/encryption';
+
+function sanitizeSettings(settings: any) {
+  if (!settings) return null;
+  return {
+    ...settings,
+    customApiKey: maskApiKey(settings.customApiKey),
+  };
+}
 
 export class AuthService {
   private generateToken(user: { id: string; email: string; fullName: string }): string {
@@ -54,6 +63,7 @@ export class AuthService {
         fullName: user.fullName,
         jobTitle: user.jobTitle,
         defaultSenderName: user.defaultSenderName,
+        settings: sanitizeSettings(user.settings),
         createdAt: user.createdAt,
       },
     };
@@ -84,7 +94,7 @@ export class AuthService {
         fullName: user.fullName,
         jobTitle: user.jobTitle,
         defaultSenderName: user.defaultSenderName,
-        settings: user.settings,
+        settings: sanitizeSettings(user.settings),
         createdAt: user.createdAt,
       },
     };
@@ -106,7 +116,7 @@ export class AuthService {
       fullName: user.fullName,
       jobTitle: user.jobTitle,
       defaultSenderName: user.defaultSenderName,
-      settings: user.settings,
+      settings: sanitizeSettings(user.settings),
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -132,7 +142,7 @@ export class AuthService {
       fullName: updated.fullName,
       jobTitle: updated.jobTitle,
       defaultSenderName: updated.defaultSenderName,
-      settings: updated.settings,
+      settings: sanitizeSettings(updated.settings),
     };
   }
 
@@ -144,9 +154,22 @@ export class AuthService {
       defaultRecipient?: string;
       defaultLength?: string;
       customApiKey?: string;
+      selectedModel?: string;
       useDemoMode?: boolean;
     }
   ) {
+    let customApiKeyUpdate: string | null | undefined = undefined;
+
+    if (data.customApiKey !== undefined) {
+      const raw = data.customApiKey.trim();
+      if (!raw) {
+        customApiKeyUpdate = null;
+      } else if (!raw.includes('****')) {
+        // Only update if not a masked string sent back by client
+        customApiKeyUpdate = encryptApiKey(raw);
+      }
+    }
+
     const settings = await prisma.userSettings.upsert({
       where: { userId },
       update: {
@@ -154,7 +177,8 @@ export class AuthService {
         ...(data.defaultTone !== undefined && { defaultTone: data.defaultTone }),
         ...(data.defaultRecipient !== undefined && { defaultRecipient: data.defaultRecipient }),
         ...(data.defaultLength !== undefined && { defaultLength: data.defaultLength }),
-        ...(data.customApiKey !== undefined && { customApiKey: data.customApiKey }),
+        ...(customApiKeyUpdate !== undefined && { customApiKey: customApiKeyUpdate }),
+        ...(data.selectedModel !== undefined && { selectedModel: data.selectedModel }),
         ...(data.useDemoMode !== undefined && { useDemoMode: data.useDemoMode }),
       },
       create: {
@@ -163,12 +187,13 @@ export class AuthService {
         defaultTone: data.defaultTone || 'Professional',
         defaultRecipient: data.defaultRecipient || 'Colleague',
         defaultLength: data.defaultLength || 'Medium',
-        customApiKey: data.customApiKey || null,
+        customApiKey: customApiKeyUpdate !== undefined ? customApiKeyUpdate : null,
+        selectedModel: data.selectedModel || null,
         useDemoMode: data.useDemoMode ?? false,
       },
     });
 
-    return settings;
+    return sanitizeSettings(settings);
   }
 
   public async changePassword(userId: string, currentPass: string, newPass: string) {

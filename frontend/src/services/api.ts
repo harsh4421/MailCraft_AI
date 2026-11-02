@@ -71,8 +71,22 @@ export const authApi = {
     const res = await api.get<AIStatus>('/users/ai-status');
     return res.data;
   },
+  getGeminiModels: async (apiKey?: string) => {
+    const res = await api.get<{ models: string[]; defaultModel: string }>('/users/gemini-models', {
+      params: apiKey ? { apiKey } : {},
+    });
+    return res.data;
+  },
   testApiKey: async (apiKey: string) => {
-    const res = await api.post<{ success: boolean; provider: string; message: string }>('/users/test-api-key', { apiKey });
+    const res = await api.post<{
+      success: boolean;
+      provider: string;
+      activeModel?: string;
+      availableModels?: string[];
+      message: string;
+      stage?: string;
+      error?: string;
+    }>('/users/test-api-key', { apiKey });
     return res.data;
   },
 };

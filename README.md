@@ -69,9 +69,9 @@
 | **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, Framer Motion, Lucide Icons, Canvas Confetti |
 | **Backend** | Node.js, Express.js, TypeScript, REST Architecture, Zod Validation |
 | **Database** | PostgreSQL, Prisma ORM (v6.19.3) |
-| **Security** | JWT (JSON Web Tokens), bcryptjs password hashing, CORS, input sanitization |
-| **AI Integration** | Dual-Engine: Local Deterministic NLP Engine + OpenAI GPT-4o-mini |
-| **Testing** | Jest, Supertest, automated integration suite |
+| **Security** | AES-256-GCM API Key Encryption, JWT, bcryptjs password hashing, Key Masking, CORS |
+| **AI Integration** | Official `@google/genai` SDK (v2.32.0), Dynamic Model Discovery (`ai.models.list()`), Groq (Llama 3.3 70B), OpenAI, + Local Deterministic NLP |
+| **Testing** | Jest, Supertest, 31 automated unit and integration tests |
 
 ---
 

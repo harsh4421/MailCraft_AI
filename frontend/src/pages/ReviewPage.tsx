@@ -28,7 +28,7 @@ import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
-import { ScoreGauge, ScoreProgressBar } from '../components/ui/ScoreGauge';
+import { ScoreGauge, ScoreProgressBar, CriteriaRatingBar } from '../components/ui/ScoreGauge';
 import { DemoBanner } from '../components/ui/DemoBanner';
 
 export const ReviewPage: React.FC = () => {
@@ -280,45 +280,71 @@ export const ReviewPage: React.FC = () => {
               </div>
             </Card>
 
-            {/* 5-Dimensional Breakdown */}
+            {/* 7-Dimensional Quality Breakdown (1-5 Scale) */}
             <Card className="md:col-span-8 p-6 flex flex-col justify-between">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    5-Dimensional Quality Breakdown
+                    7-Dimensional Executive Quality Rubric (1–5 Scale)
                   </h3>
                   <Badge variant="brand" size="sm">
                     {result.identifiedMistakes.length} Issues Identified
                   </Badge>
                 </div>
 
-                <div className="space-y-2.5 pt-1">
-                  <ScoreProgressBar
-                    label="Grammar & Spelling"
-                    score={result.grammarScore}
-                    colorClass={result.grammarScore >= 80 ? 'bg-emerald-500' : 'bg-rose-500'}
-                  />
-                  <ScoreProgressBar
-                    label="Corporate Formality & Professionalism"
-                    score={result.professionalismScore}
-                    colorClass={result.professionalismScore >= 80 ? 'bg-emerald-500' : 'bg-amber-500'}
-                  />
-                  <ScoreProgressBar
-                    label="Context & Purpose Completeness"
-                    score={result.contextScore}
-                    colorClass={result.contextScore >= 80 ? 'bg-emerald-500' : 'bg-indigo-500'}
-                  />
-                  <ScoreProgressBar
-                    label="Tone Appropriateness"
-                    score={result.toneScore}
-                    colorClass={result.toneScore >= 80 ? 'bg-emerald-500' : 'bg-sky-500'}
-                  />
-                  <ScoreProgressBar
-                    label="Clarity & Readability"
-                    score={result.clarityScore}
-                    colorClass={result.clarityScore >= 80 ? 'bg-emerald-500' : 'bg-purple-500'}
-                  />
-                </div>
+                {(() => {
+                  const cs = result.criteriaScores || {
+                    clarity: Math.max(1, Math.min(5, Math.round(result.clarityScore / 20))),
+                    toneMatch: Math.max(1, Math.min(5, Math.round(result.toneScore / 20))),
+                    completeness: Math.max(1, Math.min(5, Math.round(result.contextScore / 20))),
+                    conciseness: Math.max(1, Math.min(5, Math.round(((result.clarityScore + result.contextScore) / 2) / 20))),
+                    grammar: Math.max(1, Math.min(5, Math.round(result.grammarScore / 20))),
+                    professionalism: Math.max(1, Math.min(5, Math.round(result.professionalismScore / 20))),
+                    actionability: Math.max(1, Math.min(5, Math.round(((result.professionalismScore + result.contextScore) / 2) / 20))),
+                  };
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5 pt-1">
+                      <CriteriaRatingBar
+                        label="1. Clarity & Structure"
+                        rating={cs.clarity}
+                        colorClass={cs.clarity >= 4 ? 'bg-emerald-500' : 'bg-purple-500'}
+                      />
+                      <CriteriaRatingBar
+                        label="2. Tone Match"
+                        rating={cs.toneMatch}
+                        colorClass={cs.toneMatch >= 4 ? 'bg-emerald-500' : 'bg-sky-500'}
+                      />
+                      <CriteriaRatingBar
+                        label="3. Completeness"
+                        rating={cs.completeness}
+                        colorClass={cs.completeness >= 4 ? 'bg-emerald-500' : 'bg-indigo-500'}
+                      />
+                      <CriteriaRatingBar
+                        label="4. Conciseness"
+                        rating={cs.conciseness}
+                        colorClass={cs.conciseness >= 4 ? 'bg-emerald-500' : 'bg-teal-500'}
+                      />
+                      <CriteriaRatingBar
+                        label="5. Grammar & Spelling"
+                        rating={cs.grammar}
+                        colorClass={cs.grammar >= 4 ? 'bg-emerald-500' : 'bg-rose-500'}
+                      />
+                      <CriteriaRatingBar
+                        label="6. Professionalism"
+                        rating={cs.professionalism}
+                        colorClass={cs.professionalism >= 4 ? 'bg-emerald-500' : 'bg-amber-500'}
+                      />
+                      <div className="sm:col-span-2">
+                        <CriteriaRatingBar
+                          label="7. Actionability & Call-to-Action"
+                          rating={cs.actionability}
+                          colorClass={cs.actionability >= 4 ? 'bg-emerald-500' : 'bg-blue-500'}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* General Suggestions */}

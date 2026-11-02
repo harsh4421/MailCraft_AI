@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import {
   IAIProvider,
   DraftEmailParams,
@@ -6,174 +6,174 @@ import {
   RefineEmailParams,
   ReviewEmailParams,
   ReviewEmailResult,
+  ReviewCriteriaScores,
 } from './aiProvider.interface';
+import { getAvailableGeminiModels, pickDefaultGeminiModel, GEMINI_CONFIG_FALLBACK_MODELS } from '../../config/ai.config';
 
-function cleanAndParseJson(text: string): any {
+function cleanAndParseJson<T = any>(text: string): T {
   let cleaned = text.trim();
-  // Strip markdown code fences if present
+  // Strip markdown code fences if present (e.g. ```json ... ``` or ``` ...)
   if (cleaned.startsWith('```json')) {
     cleaned = cleaned.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
   } else if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
   }
-  return JSON.parse(cleaned);
+
+  // Find the first { and last } in case there is surrounding text
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+
+  return JSON.parse(cleaned) as T;
 }
 
-const CANDIDATE_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-flash',
-  'gemini-2.5-pro',
-  'gemini-1.5-pro',
-  'gemini-pro',
-];
+/**
+ * Exponential backoff sleep helper
+ */
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class GeminiProvider implements IAIProvider {
   public name = 'Google Gemini';
-  private client: GoogleGenerativeAI | null = null;
+  private ai: GoogleGenAI | null = null;
   private apiKey: string;
   public modelName: string;
-  private static resolvedModelCache: Map<string, string> = new Map();
 
-  constructor(apiKey?: string, modelName: string = 'gemini-2.5-flash') {
+  constructor(apiKey?: string, modelName?: string) {
     this.apiKey = (apiKey || process.env.GEMINI_API_KEY || '').trim();
-    this.modelName = modelName;
+    this.modelName = modelName || '';
+
     if (this.apiKey && this.apiKey.length > 5) {
-      this.client = new GoogleGenerativeAI(this.apiKey);
-      // Check if we previously found a working model for this key
-      if (GeminiProvider.resolvedModelCache.has(this.apiKey)) {
-        this.modelName = GeminiProvider.resolvedModelCache.get(this.apiKey)!;
-      }
+      this.ai = new GoogleGenAI({ apiKey: this.apiKey });
     }
   }
 
   public isAvailable(): boolean {
-    return !!(this.client && this.apiKey.length > 5);
+    return !!(this.ai && this.apiKey.length > 5);
   }
 
   /**
-   * Discover available models directly from Google's models endpoint
+   * Resolves the active model: if not explicitly specified, chooses from available models.
    */
-  private async discoverWorkingModel(): Promise<string> {
-    if (GeminiProvider.resolvedModelCache.has(this.apiKey)) {
-      return GeminiProvider.resolvedModelCache.get(this.apiKey)!;
+  public async resolveActiveModel(): Promise<string> {
+    if (this.modelName && this.modelName.length > 0) {
+      return this.modelName;
     }
-
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(this.apiKey)}`,
-        { signal: controller.signal }
-      );
-      clearTimeout(timeoutId);
-
-      if (resp.ok) {
-        const data = (await resp.json()) as { models?: Array<{ name: string; supportedGenerationMethods?: string[] }> };
-        if (data.models && Array.isArray(data.models)) {
-          const contentModels = data.models
-            .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
-            .map((m) => m.name.replace(/^models\//, ''));
-
-          // Match against our prioritized candidates
-          for (const candidate of CANDIDATE_MODELS) {
-            if (contentModels.includes(candidate)) {
-              this.modelName = candidate;
-              GeminiProvider.resolvedModelCache.set(this.apiKey, candidate);
-              return candidate;
-            }
-          }
-
-          // If no prioritized candidate matched, pick the first flash or pro model
-          const flashOrPro = contentModels.find((m) => m.includes('flash') || m.includes('pro') || m.includes('gemini'));
-          if (flashOrPro) {
-            this.modelName = flashOrPro;
-            GeminiProvider.resolvedModelCache.set(this.apiKey, flashOrPro);
-            return flashOrPro;
-          }
-        }
-      }
+      const { defaultModel } = await getAvailableGeminiModels(this.apiKey);
+      this.modelName = defaultModel;
+      return defaultModel;
     } catch {
-      // Ignore network or timeout errors during discovery, fallback to sequential trial
+      this.modelName = GEMINI_CONFIG_FALLBACK_MODELS[0];
+      return this.modelName;
     }
-
-    return this.modelName;
   }
 
   /**
-   * Generates content with automatic fallback across supported model names
+   * Generates content with:
+   * - 404 auto-retry (switches to next available model, max 1 retry)
+   * - 500/503 exponential backoff (max 3 attempts)
+   * - JSON mode handling
    */
-  private async generateWithFallback(prompt: string): Promise<string> {
-    if (!this.client) {
+  public async generateContentWithResilience(
+    prompt: string,
+    isJson: boolean = true
+  ): Promise<{ text: string; activeModel: string }> {
+    if (!this.ai) {
       throw new Error('Gemini API client is not configured.');
     }
 
-    await this.discoverWorkingModel();
+    let currentModel = await this.resolveActiveModel();
+    let retried404 = false;
 
-    const modelsToTry = [
-      this.modelName,
-      ...CANDIDATE_MODELS.filter((m) => m !== this.modelName),
-    ];
+    // Outer loop allows exactly 1 model-switch retry if 404 occurs
+    while (true) {
+      let attempts = 0;
+      const maxAttempts = 3;
 
-    let lastError: any = null;
-
-    for (const modelToAttempt of modelsToTry) {
-      try {
-        // Try with JSON mode first
-        const model = this.client.getGenerativeModel({
-          model: modelToAttempt,
-          generationConfig: { responseMimeType: 'application/json' },
-        });
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        if (text) {
-          this.modelName = modelToAttempt;
-          GeminiProvider.resolvedModelCache.set(this.apiKey, modelToAttempt);
-          return text;
-        }
-      } catch (err: any) {
-        lastError = err;
-        const msg = (err?.message || '').toLowerCase();
-
-        // If the error is about responseMimeType not being supported, try without JSON mode
-        if (msg.includes('responsemimetype') || msg.includes('mime_type') || msg.includes('schemamismatch')) {
-          try {
-            const fallbackModel = this.client.getGenerativeModel({ model: modelToAttempt });
-            const result = await fallbackModel.generateContent(prompt);
-            const text = result.response.text();
-            if (text) {
-              this.modelName = modelToAttempt;
-              GeminiProvider.resolvedModelCache.set(this.apiKey, modelToAttempt);
-              return text;
-            }
-          } catch (innerErr) {
-            lastError = innerErr;
+      while (attempts < maxAttempts) {
+        attempts++;
+        try {
+          const config: any = {};
+          if (isJson) {
+            config.responseMimeType = 'application/json';
           }
-        }
 
-        // If the error is a 404 (model not found), continue to next model candidate
-        if (msg.includes('404') || msg.includes('not found') || msg.includes('not supported')) {
-          continue;
-        }
+          const response = await this.ai.models.generateContent({
+            model: currentModel,
+            contents: prompt,
+            config,
+          });
 
-        // For other fatal errors (e.g. invalid key 400, quota 429), stop immediately and throw
-        throw err;
+          const text = response.text || '';
+          if (!text) {
+            throw new Error('Empty response received from Gemini.');
+          }
+
+          this.modelName = currentModel;
+          return { text, activeModel: currentModel };
+        } catch (err: any) {
+          const errMsg = (err?.message || '').toLowerCase();
+          const status = err?.status || err?.statusCode || (errMsg.includes('404') ? 404 : 0);
+
+          // 1. Check for 404 (Model Not Found) - retry ONCE with next candidate model
+          if ((status === 404 || errMsg.includes('not found') || errMsg.includes('not supported')) && !retried404) {
+            retried404 = true;
+            try {
+              const { models } = await getAvailableGeminiModels(this.apiKey, true);
+              const nextModel = models.find((m) => m !== currentModel) || GEMINI_CONFIG_FALLBACK_MODELS[1];
+              console.warn(`[GeminiProvider] 404 on ${currentModel}. Switched to ${nextModel} for retry.`);
+              currentModel = nextModel;
+              break; // Break inner loop to retry with new model
+            } catch {
+              currentModel = GEMINI_CONFIG_FALLBACK_MODELS[1];
+              break;
+            }
+          }
+
+          // 2. Check for 500/503 (Server Busy) - retry with exponential backoff up to maxAttempts
+          if ((status === 500 || status === 503 || errMsg.includes('busy') || errMsg.includes('overloaded')) && attempts < maxAttempts) {
+            const backoffMs = Math.pow(2, attempts) * 500; // 1s, 2s, 4s
+            console.warn(`[GeminiProvider] Google service busy (attempt ${attempts}/${maxAttempts}). Retrying in ${backoffMs}ms...`);
+            await sleep(backoffMs);
+            continue;
+          }
+
+          // 3. Rate limit 429
+          if (status === 429 || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('rate limit')) {
+            throw new Error('Rate limit or free-tier quota reached. Try again shortly.');
+          }
+
+          // 4. Invalid key
+          if (status === 400 || status === 401 || status === 403 || errMsg.includes('api_key') || errMsg.includes('api key not valid')) {
+            throw new Error('Invalid or restricted API key. Check it in Google AI Studio.');
+          }
+
+          // Fatal or exhausted attempts
+          throw err;
+        }
+      }
+
+      if (!retried404) {
+        break;
       }
     }
 
-    throw lastError || new Error(`Failed to generate content with Gemini across candidate models.`);
+    throw new Error('Failed to generate content with Gemini.');
   }
 
   public async draftEmail(params: DraftEmailParams): Promise<DraftEmailResult> {
-    const prompt = `You are MailCraft AI's executive communications expert.
-Draft an exceptional email matching the user's specific recipient, purpose, context, and tone.
-Rules:
-- Respect the requested recipient and tone strictly.
-- Never fabricate dates, commitments, or facts not provided in the context.
-- Keep the language natural, concise, and professional.
+    const prompt = `You are MailCraft AI's executive communications specialist.
+Draft an exceptional, highly polished email matching the user's specific recipient, purpose, context, and tone.
+
+Safety & Ethics Policy:
+If the user's request asks for unethical, fraudulent, harassing, phishing, deceptive, or illegal actions, politely and firmly REFUSE to generate the email. In the JSON body, clearly state that MailCraft AI cannot assist with unethical communications, and explain why.
+
+Strict Instructions:
+- Respect the requested recipient: "${params.recipient}".
+- Tone requested: "${params.tone}".
+- Never fabricate dates or facts not in the context.
 - Return ONLY valid JSON in this exact structure:
 {
   "subject": "string",
@@ -186,38 +186,42 @@ Rules:
 User Parameters:
 Recipient: ${params.recipient}
 Purpose: ${params.purpose}
-Context: ${params.context}
+Context & Key Details: ${params.context}
 Tone: ${params.tone}
 Length: ${params.length}
 Sender Name: ${params.senderName || '[Your Name]'}
 Additional Instructions: ${params.additionalInstructions || 'None'}`;
 
-    const text = await this.generateWithFallback(prompt);
-    const parsed = cleanAndParseJson(text);
+    let parsed: any;
+    let modelUsed = this.modelName;
+
+    try {
+      const { text, activeModel } = await this.generateContentWithResilience(prompt, true);
+      modelUsed = activeModel;
+      parsed = cleanAndParseJson(text);
+    } catch (parseErr) {
+      // 1-shot retry without JSON enforcement in case schema failed
+      const { text, activeModel } = await this.generateContentWithResilience(
+        `${prompt}\n\nIMPORTANT: Return ONLY the raw JSON object. Do not wrap in markdown or commentary.`,
+        false
+      );
+      modelUsed = activeModel;
+      parsed = cleanAndParseJson(text);
+    }
 
     return {
       subject: parsed.subject || `${params.purpose} - ${params.senderName}`,
-      greeting: parsed.greeting || 'Hello,',
+      greeting: parsed.greeting || 'Dear Colleague,',
       body: parsed.body || '',
       closing: parsed.closing || 'Sincerely,',
       senderName: parsed.senderName || params.senderName,
       isDemoMode: false,
-      aiModel: this.modelName,
+      aiModel: modelUsed,
     };
   }
 
   public async refineEmail(params: RefineEmailParams): Promise<DraftEmailResult> {
-    const prompt = `You are MailCraft AI's email refinement expert. Modify the existing email according to the instruction.
-Rules:
-- Preserve the core factual meaning.
-- Return ONLY valid JSON:
-{
-  "subject": "string",
-  "greeting": "string",
-  "body": "string",
-  "closing": "string",
-  "senderName": "string"
-}
+    const prompt = `You are MailCraft AI's refinement expert. Modify the existing email according to the specified action.
 
 Existing Email:
 Subject: ${params.currentDraft.subject}
@@ -229,10 +233,34 @@ Sender: ${params.currentDraft.senderName}
 
 Action: ${params.action}
 Target Tone: ${params.targetTone || 'N/A'}
-Instruction: ${params.instruction || 'N/A'}`;
+Instruction: ${params.instruction || 'N/A'}
 
-    const text = await this.generateWithFallback(prompt);
-    const parsed = cleanAndParseJson(text);
+Rules:
+- Preserve factual meaning while modifying phrasing.
+- Return ONLY valid JSON in this exact structure:
+{
+  "subject": "string",
+  "greeting": "string",
+  "body": "string",
+  "closing": "string",
+  "senderName": "string"
+}`;
+
+    let parsed: any;
+    let modelUsed = this.modelName;
+
+    try {
+      const { text, activeModel } = await this.generateContentWithResilience(prompt, true);
+      modelUsed = activeModel;
+      parsed = cleanAndParseJson(text);
+    } catch {
+      const { text, activeModel } = await this.generateContentWithResilience(
+        `${prompt}\n\nIMPORTANT: Return ONLY valid JSON.`,
+        false
+      );
+      modelUsed = activeModel;
+      parsed = cleanAndParseJson(text);
+    }
 
     return {
       subject: parsed.subject || params.currentDraft.subject,
@@ -241,44 +269,50 @@ Instruction: ${params.instruction || 'N/A'}`;
       closing: parsed.closing || params.currentDraft.closing,
       senderName: parsed.senderName || params.currentDraft.senderName,
       isDemoMode: false,
-      aiModel: this.modelName,
+      aiModel: modelUsed,
     };
   }
 
   public async reviewEmail(params: ReviewEmailParams): Promise<ReviewEmailResult> {
-    const prompt = `You are MailCraft AI's expert email analyst and reviewer.
-Analyze the user's email against 5 core criteria:
-1. Grammar & Spelling (grammar mistakes, spelling errors, punctuation, run-on sentences)
-2. Professionalism (greeting, closing, corporate etiquette, inappropriate slang)
-3. Context (missing details, addressing purpose, relevance to recipient)
-4. Tone (detected tone, alignment with desired tone)
-5. Clarity (confusing phrasing, readability, wordiness)
+    const prompt = `You are MailCraft AI's senior executive email reviewer and communications auditor.
+Carefully review the provided email against 7 specific quality dimensions.
 
-Do not invent mistakes. Each mistake must cite the actual substring from the email.
-Calculate realistic scores out of 100 for each category and an overall score out of 100.
-Also produce a complete, polished, improved version of the email.
+Evaluate each dimension strictly on a 1 to 5 integer scale:
+1. Clarity (1-5): How clear, understandable, and free of ambiguity is the email?
+2. Tone match (1-5): How well does the email adhere to the desired tone ("${params.desiredTone}") for the recipient ("${params.recipient}")?
+3. Completeness (1-5): Does the email include all necessary background context and purpose details?
+4. Conciseness (1-5): Is the email appropriately concise and free of unnecessary fluff or run-on phrasing?
+5. Grammar (1-5): Are spelling, punctuation, and grammar correct?
+6. Professionalism (1-5): Does the email observe standard business etiquette, greetings, and sign-offs?
+7. Actionability (1-5): Is the next step, call-to-action, or response request explicit and actionable?
 
-Return ONLY valid JSON matching this structure:
+Identify any specific mistakes in the text (cite the exact substring as "original", provide a "suggestion", an "explanation", and "severity" of "low"|"medium"|"high").
+Generate a polished, completely improved version of the email that fixes all flaws while preserving the author's intent.
+
+Return ONLY valid JSON matching this exact structure:
 {
-  "overallScore": number (0-100),
-  "grammarScore": number (0-100),
-  "professionalismScore": number (0-100),
-  "contextScore": number (0-100),
-  "toneScore": number (0-100),
-  "clarityScore": number (0-100),
+  "criteriaScores": {
+    "clarity": number (1-5),
+    "toneMatch": number (1-5),
+    "completeness": number (1-5),
+    "conciseness": number (1-5),
+    "grammar": number (1-5),
+    "professionalism": number (1-5),
+    "actionability": number (1-5)
+  },
   "detectedTone": "string",
   "identifiedMistakes": [
     {
-      "id": "string",
+      "id": "m1",
       "type": "grammar" | "spelling" | "punctuation" | "professionalism" | "context" | "tone" | "clarity",
-      "original": "substring from email",
-      "suggestion": "string replacement",
-      "explanation": "string explaining why",
+      "original": "exact substring from email",
+      "suggestion": "improved replacement",
+      "explanation": "why this should be changed",
       "severity": "low" | "medium" | "high"
     }
   ],
-  "suggestions": ["string general advice 1", "string general advice 2"],
-  "improvedEmail": "complete rewritten email text"
+  "suggestions": ["specific actionable advice 1", "specific actionable advice 2"],
+  "improvedEmail": "complete rewritten improved email text"
 }
 
 Email to Review:
@@ -292,22 +326,58 @@ Email Text:
 ${params.originalEmail}
 """`;
 
-    const text = await this.generateWithFallback(prompt);
-    const parsed = cleanAndParseJson(text);
+    let parsed: any;
+    let modelUsed = this.modelName;
+
+    try {
+      const { text, activeModel } = await this.generateContentWithResilience(prompt, true);
+      modelUsed = activeModel;
+      parsed = cleanAndParseJson(text);
+    } catch {
+      const { text, activeModel } = await this.generateContentWithResilience(
+        `${prompt}\n\nIMPORTANT: Output valid JSON only.`,
+        false
+      );
+      modelUsed = activeModel;
+      parsed = cleanAndParseJson(text);
+    }
+
+    const c = parsed.criteriaScores || {};
+    const criteriaScores: ReviewCriteriaScores = {
+      clarity: Math.max(1, Math.min(5, Number(c.clarity) || 4)),
+      toneMatch: Math.max(1, Math.min(5, Number(c.toneMatch) || 4)),
+      completeness: Math.max(1, Math.min(5, Number(c.completeness) || 4)),
+      conciseness: Math.max(1, Math.min(5, Number(c.conciseness) || 4)),
+      grammar: Math.max(1, Math.min(5, Number(c.grammar) || 4)),
+      professionalism: Math.max(1, Math.min(5, Number(c.professionalism) || 4)),
+      actionability: Math.max(1, Math.min(5, Number(c.actionability) || 4)),
+    };
+
+    // Calculate overall score (0-100 scale: 7 criteria * max 5 = 35 points)
+    const sum =
+      criteriaScores.clarity +
+      criteriaScores.toneMatch +
+      criteriaScores.completeness +
+      criteriaScores.conciseness +
+      criteriaScores.grammar +
+      criteriaScores.professionalism +
+      criteriaScores.actionability;
+    const overallScore = Math.round((sum / 35) * 100);
 
     return {
-      overallScore: Number(parsed.overallScore) || 85,
-      grammarScore: Number(parsed.grammarScore) || 85,
-      professionalismScore: Number(parsed.professionalismScore) || 85,
-      contextScore: Number(parsed.contextScore) || 85,
-      toneScore: Number(parsed.toneScore) || 85,
-      clarityScore: Number(parsed.clarityScore) || 85,
+      overallScore,
+      grammarScore: criteriaScores.grammar * 20,
+      professionalismScore: criteriaScores.professionalism * 20,
+      contextScore: criteriaScores.completeness * 20,
+      toneScore: criteriaScores.toneMatch * 20,
+      clarityScore: criteriaScores.clarity * 20,
+      criteriaScores,
       detectedTone: parsed.detectedTone || 'Neutral',
       identifiedMistakes: Array.isArray(parsed.identifiedMistakes) ? parsed.identifiedMistakes : [],
       suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
       improvedEmail: parsed.improvedEmail || params.originalEmail,
       isDemoMode: false,
-      aiModel: this.modelName,
+      aiModel: modelUsed,
     };
   }
 }

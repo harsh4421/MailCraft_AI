@@ -5,6 +5,7 @@ import {
   updateSettings,
   changePassword,
   getAIStatus,
+  getGeminiModels,
   updateProfileSchema,
   updateSettingsSchema,
   changePasswordSchema,
@@ -20,6 +21,7 @@ router.put('/profile', authenticateJwt, validateRequest(updateProfileSchema), up
 router.put('/settings', authenticateJwt, validateRequest(updateSettingsSchema), updateSettings);
 router.put('/password', authenticateJwt, validateRequest(changePasswordSchema), changePassword);
 router.get('/ai-status', optionalJwt, getAIStatus);
+router.get('/gemini-models', authenticateJwt, getGeminiModels);
 router.post('/test-api-key', authenticateJwt, testApiKey);
 
 export default router;
