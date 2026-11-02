@@ -12,9 +12,21 @@ import {
 } from '../types';
 
 const getBaseUrl = (): string => {
-  const envUrl = (import.meta as any).env?.VITE_API_URL;
-  if (!envUrl) return '/api';
-  const trimmed = String(envUrl).replace(/\/$/, '');
+  const customUrl = typeof window !== 'undefined' ? localStorage.getItem('mailcraft_api_url') : null;
+  let envUrl = customUrl || (import.meta as any).env?.VITE_API_URL;
+  
+  if (!envUrl) {
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      return '/api';
+    }
+    return '/api';
+  }
+
+  envUrl = String(envUrl).trim();
+  if (!envUrl.startsWith('http://') && !envUrl.startsWith('https://') && !envUrl.startsWith('/')) {
+    envUrl = `https://${envUrl}`;
+  }
+  const trimmed = envUrl.replace(/\/$/, '');
   return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
 };
 
@@ -34,9 +46,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Intercept 401s
+// Intercept responses: detect HTML response from static server rewrites
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (
+      typeof response.data === 'string' &&
+      (response.data.includes('<!DOCTYPE html>') || response.data.includes('<!doctype html>'))
+    ) {
+      return Promise.reject({
+        response: {
+          data: {
+            error: 'Backend API unreachable: Received static HTML instead of JSON. Ensure your Backend URL is set in Render environment variables as VITE_API_URL.',
+          },
+        },
+      });
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401 && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
       // Clear token if invalid

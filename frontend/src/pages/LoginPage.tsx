@@ -16,6 +16,20 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showApiSettings, setShowApiSettings] = useState(false);
+  const [customApiUrl, setCustomApiUrl] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('mailcraft_api_url') || '' : ''));
+
+  const handleSaveApiUrl = () => {
+    if (customApiUrl.trim()) {
+      localStorage.setItem('mailcraft_api_url', customApiUrl.trim());
+      toast.success('Backend API URL saved! Reloading...');
+      setTimeout(() => window.location.reload(), 500);
+    } else {
+      localStorage.removeItem('mailcraft_api_url');
+      toast.info('API URL reset to default. Reloading...');
+      setTimeout(() => window.location.reload(), 500);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,6 +158,34 @@ export const LoginPage: React.FC = () => {
                 <Link to="/register" className="text-brand-600 font-semibold hover:underline">
                   Create Account
                 </Link>
+              </div>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowApiSettings(!showApiSettings)}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline"
+                >
+                  {showApiSettings ? 'Hide Backend URL Settings' : '🔧 Configure Backend API URL'}
+                </button>
+                {showApiSettings && (
+                  <div className="mt-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-left space-y-2">
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                      Backend Service URL (from Render)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="https://mailcraft-backend-xxxx.onrender.com"
+                      value={customApiUrl}
+                      onChange={(e) => setCustomApiUrl(e.target.value)}
+                      className="w-full text-xs px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white"
+                    />
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="text-[10px] text-slate-400">Paste your live Render backend URL</span>
+                      <Button size="sm" variant="secondary" onClick={handleSaveApiUrl}>Save URL</Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
