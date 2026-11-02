@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Mail,
@@ -29,8 +29,22 @@ import { ScoreGauge } from '../components/ui/ScoreGauge';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'draft' | 'review'>('draft');
   const [copied, setCopied] = useState(false);
+
+  // Smoothly scroll to section if URL has a hash
+  useEffect(() => {
+    if (location.hash) {
+      const id = location.hash.replace('#', '');
+      const el = document.getElementById(id);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+      }
+    }
+  }, [location.hash]);
 
   // Interactive sample for Drafting Preview
   const sampleDraft = {
@@ -111,7 +125,15 @@ export const LandingPage: React.FC = () => {
             >
               Start Writing Free
             </Button>
-            <a href="#interactive-preview" className="w-full sm:w-auto">
+            <a
+              href="#interactive-preview"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById('interactive-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                window.history.pushState(null, '', '/#interactive-preview');
+              }}
+              className="w-full sm:w-auto"
+            >
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
                 Explore Features
               </Button>
@@ -137,7 +159,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Interactive Product Preview */}
-      <section id="interactive-preview" className="py-16 bg-white dark:bg-slate-950/60 border-y border-slate-200/80 dark:border-slate-800/80">
+      <section id="interactive-preview" className="scroll-mt-20 py-16 bg-white dark:bg-slate-950/60 border-y border-slate-200/80 dark:border-slate-800/80">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           <div className="text-center space-y-2">
             <Badge variant="accent" size="sm">Interactive Product Experience</Badge>
@@ -350,7 +372,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Feature Showcase Grid */}
-      <section id="features" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
+      <section id="features" className="scroll-mt-20 py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
         <div className="text-center space-y-3">
           <Badge variant="brand" size="sm">Core Architecture</Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white">
@@ -449,7 +471,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="py-20 bg-slate-50 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-800/80">
+      <section id="how-it-works" className="scroll-mt-20 py-20 bg-slate-50 dark:bg-slate-900/60 border-y border-slate-200/80 dark:border-slate-800/80">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center space-y-2">
             <Badge variant="brand" size="sm">Simple Workflow</Badge>
@@ -493,7 +515,7 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Technology Section */}
-      <section id="tech-stack" className="py-16 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+      <section id="tech-stack" className="scroll-mt-20 py-16 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
         <div className="text-center space-y-2">
           <Badge variant="neutral" size="sm">Engineering Stack</Badge>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">

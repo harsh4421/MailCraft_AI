@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Sparkles, Moon, Sun, Menu, X, ArrowRight, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -10,12 +10,37 @@ export const Navbar: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
+    e.preventDefault();
+    setMobileMenuOpen(false);
+
+    if (location.pathname === '/') {
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.history.pushState(null, '', `/#${targetId}`);
+        return;
+      }
+    }
+
+    navigate(`/#${targetId}`);
+  };
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    if (location.pathname === '/') {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.history.pushState(null, '', '/');
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 w-full glass-header">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand Logo */}
-        <Link to="/" className="flex items-center gap-2.5 group">
+        <Link to="/" onClick={handleLogoClick} className="flex items-center gap-2.5 group">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-700 via-brand-600 to-accent-light flex items-center justify-center text-white shadow-glow-sm group-hover:scale-105 transition-transform">
             <Mail className="w-5 h-5" />
           </div>
@@ -31,15 +56,27 @@ export const Navbar: React.FC = () => {
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600 dark:text-slate-300">
-          <Link to="/#features" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+          <a
+            href="#features"
+            onClick={(e) => handleNavClick(e, 'features')}
+            className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
+          >
             Features
-          </Link>
-          <Link to="/#how-it-works" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+          </a>
+          <a
+            href="#how-it-works"
+            onClick={(e) => handleNavClick(e, 'how-it-works')}
+            className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
+          >
             How It Works
-          </Link>
-          <Link to="/#tech-stack" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
+          </a>
+          <a
+            href="#tech-stack"
+            onClick={(e) => handleNavClick(e, 'tech-stack')}
+            className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
+          >
             Technology
-          </Link>
+          </a>
           <Link to="/about" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
             About Project
           </Link>
@@ -105,24 +142,31 @@ export const Navbar: React.FC = () => {
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-4 pt-2 pb-6 space-y-3">
-          <Link
-            to="/#features"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 text-sm font-medium text-slate-700 dark:text-slate-300"
+          <a
+            href="#features"
+            onClick={(e) => handleNavClick(e, 'features')}
+            className="block py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-brand-600"
           >
             Features
-          </Link>
-          <Link
-            to="/#how-it-works"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 text-sm font-medium text-slate-700 dark:text-slate-300"
+          </a>
+          <a
+            href="#how-it-works"
+            onClick={(e) => handleNavClick(e, 'how-it-works')}
+            className="block py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-brand-600"
           >
             How It Works
-          </Link>
+          </a>
+          <a
+            href="#tech-stack"
+            onClick={(e) => handleNavClick(e, 'tech-stack')}
+            className="block py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-brand-600"
+          >
+            Technology
+          </a>
           <Link
             to="/about"
             onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 text-sm font-medium text-slate-700 dark:text-slate-300"
+            className="block py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-brand-600"
           >
             About Project
           </Link>
