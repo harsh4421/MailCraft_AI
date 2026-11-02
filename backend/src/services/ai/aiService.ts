@@ -26,8 +26,15 @@ export class AIService {
     const rawKey = decryptApiKey(apiKey).trim();
     if (!rawKey || rawKey.length < 5) return null;
 
-    // Detect Google Gemini (supports both legacy AIza... and new AQ. format)
-    if (rawKey.startsWith('AIza') || rawKey.startsWith('AQ.') || rawKey.startsWith('AQ') || process.env.GEMINI_API_KEY === rawKey) {
+    // Detect Google Gemini (supports legacy AIza..., new AQ., or any key paired with Gemini model/non-OpenAI/Groq prefix)
+    if (
+      rawKey.startsWith('AIza') ||
+      rawKey.startsWith('AQ.') ||
+      rawKey.startsWith('AQ') ||
+      (preferredModel && preferredModel.startsWith('gemini')) ||
+      (!rawKey.startsWith('gsk_') && !rawKey.startsWith('sk-')) ||
+      process.env.GEMINI_API_KEY === rawKey
+    ) {
       const gemini = new GeminiProvider(rawKey, preferredModel || undefined);
       if (gemini.isAvailable()) {
         return { provider: gemini, name: `Google Gemini (${preferredModel || 'Dynamic Auto'})` };
