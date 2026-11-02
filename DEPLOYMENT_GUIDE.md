@@ -11,9 +11,9 @@ This guide provides clear, practical instructions on:
 ## 🔑 Part 1: Connecting a Live AI API Key
 
 MailCraft AI features a **multi-provider AI architecture** supporting:
-* **Google Gemini (`gemini-1.5-flash`):** Free tier available via Google AI Studio.
-* **OpenAI (`gpt-4o-mini` / `gpt-4o`):** Standard OpenAI platform keys (`sk-...`).
+* **Google Gemini (Dynamic Discovery: `gemini-2.5-flash`, `gemini-2.0-flash`, etc.):** Free tier available via Google AI Studio using the official `@google/genai` SDK with dynamic model discovery and active model selection.
 * **Groq (`llama-3.3-70b-versatile`):** Ultra-fast inference with free tier available (`gsk_...`).
+* **OpenAI (`gpt-4o-mini` / `gpt-4o`):** Standard OpenAI platform keys (`sk-...`).
 
 ### How to Activate Your Key:
 
