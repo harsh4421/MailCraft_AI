@@ -10,7 +10,7 @@ export class EmailService {
       return result;
     }
 
-    let generationRecord = null;
+    let generationRecord: any = null;
     if (userId) {
       generationRecord = await prisma.emailGeneration.create({
         data: {

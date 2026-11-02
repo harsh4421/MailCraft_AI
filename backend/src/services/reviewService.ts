@@ -6,7 +6,7 @@ export class ReviewService {
   public async analyzeEmail(params: ReviewEmailParams, userId?: string) {
     const result = await aiService.reviewEmail(params, userId);
 
-    let reviewRecord = null;
+    let reviewRecord: any = null;
     if (userId) {
       reviewRecord = await prisma.emailReview.create({
         data: {
