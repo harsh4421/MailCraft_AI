@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { authService } from '../services/authService';
 import { aiService } from '../services/ai/aiService';
-import { getAvailableGeminiModels } from '../config/ai.config';
+import { getAvailableGeminiModels, extractTextFromResponse } from '../config/ai.config';
 import { decryptApiKey } from '../utils/encryption';
 import prisma from '../config/prisma';
 
@@ -220,11 +220,13 @@ export const testApiKey = async (req: Request, res: Response, next: NextFunction
         try {
           const testResp = await ai.models.generateContent({
             model: activeModel,
-            contents: 'Reply with OK',
+            contents: 'Hello, please reply with OK.',
           });
 
-          const replyText = testResp.text || '';
-          if (!replyText) {
+          const replyText = extractTextFromResponse(testResp);
+          const hasCandidate = !!(testResp.candidates && testResp.candidates.length > 0);
+
+          if (!replyText && !hasCandidate) {
             throw new Error('Received empty response from Gemini model');
           }
 

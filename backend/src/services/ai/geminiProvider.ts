@@ -8,7 +8,12 @@ import {
   ReviewEmailResult,
   ReviewCriteriaScores,
 } from './aiProvider.interface';
-import { getAvailableGeminiModels, pickDefaultGeminiModel, GEMINI_CONFIG_FALLBACK_MODELS } from '../../config/ai.config';
+import {
+  getAvailableGeminiModels,
+  pickDefaultGeminiModel,
+  GEMINI_CONFIG_FALLBACK_MODELS,
+  extractTextFromResponse,
+} from '../../config/ai.config';
 
 function cleanAndParseJson<T = any>(text: string): T {
   let cleaned = text.trim();
@@ -106,7 +111,7 @@ export class GeminiProvider implements IAIProvider {
             config,
           });
 
-          const text = response.text || '';
+          const text = extractTextFromResponse(response);
           if (!text) {
             throw new Error('Empty response received from Gemini.');
           }
