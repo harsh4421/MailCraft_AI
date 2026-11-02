@@ -69,7 +69,7 @@ export const HeroVisual3D: React.FC = () => {
         }}
         animate={isReducedMotion ? undefined : { y: [0, -8, 0] }}
         transition={isReducedMotion ? undefined : { duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-        className="relative w-full max-w-[380px] h-[360px] pointer-events-none"
+        className="relative w-full max-w-[310px] sm:max-w-[380px] h-[310px] sm:h-[360px] pointer-events-none mx-auto"
       >
         {/* Layer 0: Envelope Back Plate */}
         <div
