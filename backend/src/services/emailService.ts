@@ -6,6 +6,10 @@ export class EmailService {
   public async generateDraft(params: DraftEmailParams, userId?: string) {
     const result = await aiService.draftEmail(params, userId);
 
+    if (result.needsClarification) {
+      return result;
+    }
+
     let generationRecord = null;
     if (userId) {
       generationRecord = await prisma.emailGeneration.create({

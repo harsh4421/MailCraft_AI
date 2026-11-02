@@ -169,6 +169,7 @@ export class GeminiProvider implements IAIProvider {
   }
 
   public async draftEmail(params: DraftEmailParams): Promise<DraftEmailResult> {
+    const effectivePurpose = params.confirmedPurpose || params.purpose;
     const prompt = `You are MailCraft AI's executive communications specialist.
 Draft an exceptional, highly polished email matching the user's specific recipient, purpose, context, and tone.
 
@@ -176,10 +177,19 @@ Safety & Ethics Policy:
 If the user's request asks for unethical, fraudulent, harassing, phishing, deceptive, or illegal actions, politely and firmly REFUSE to generate the email. In the JSON body, clearly state that MailCraft AI cannot assist with unethical communications, and explain why.
 
 Strict Instructions:
-- Respect the requested recipient: "${params.recipient}".
-- Tone requested: "${params.tone}".
-- Never fabricate dates or facts not in the context.
-- Return ONLY valid JSON in this exact structure:
+1. Language Correction & Fact Preservation:
+   - Automatically transform broken English, typos, shorthand, and Hinglish in the context into clear, grammatically correct professional email language (e.g. "i unwelll not able to come twoo dyss" -> "I am unwell and will be unable to attend for two days.").
+   - NEVER copy malformed or misspelled context verbatim into the final email.
+   - Faithfully preserve all supplied facts, dates, names, and numbers.
+   - NEVER invent unmentioned facts, diagnoses, specific dates, doctor notes, attachments, completion percentages, or unsupported commitments.
+2. Eliminate Unresolved Placeholders:
+   - NEVER emit bracketed placeholders such as [Course Name], [Last Name], [Your Name], [Specific Dates], or [Topic].
+   - If a professor's name is not specified, use "Dear Professor,".
+   - If a course name is optional or unspecified, omit it cleanly.
+3. Purpose-Adaptive Organization:
+   - Structure the email body strictly for the intended purpose (e.g. leave request: absence statement, duration, approval request; extension request: reason for absence, extension request).
+   - Do NOT force generic canned paragraphs into the email (NEVER add "I have carefully prepared the prerequisites", "I will ensure all pending matters remain organized", or "I hope this email finds you well" to simple leave or extension notes).
+4. Return ONLY valid JSON in this exact structure:
 {
   "subject": "string",
   "greeting": "string",
@@ -190,11 +200,11 @@ Strict Instructions:
 
 User Parameters:
 Recipient: ${params.recipient}
-Purpose: ${params.purpose}
+Purpose: ${effectivePurpose}
 Context & Key Details: ${params.context}
 Tone: ${params.tone}
 Length: ${params.length}
-Sender Name: ${params.senderName || '[Your Name]'}
+Sender Name: ${params.senderName || 'Harsh Kumar'}
 Additional Instructions: ${params.additionalInstructions || 'None'}`;
 
     let parsed: any;
@@ -215,11 +225,11 @@ Additional Instructions: ${params.additionalInstructions || 'None'}`;
     }
 
     return {
-      subject: parsed.subject || `${params.purpose} - ${params.senderName}`,
-      greeting: parsed.greeting || 'Dear Colleague,',
+      subject: parsed.subject || `${effectivePurpose} - ${params.senderName || 'Harsh Kumar'}`,
+      greeting: parsed.greeting || (params.recipient.toLowerCase().includes('prof') ? 'Dear Professor,' : 'Hello,'),
       body: parsed.body || '',
       closing: parsed.closing || 'Sincerely,',
-      senderName: parsed.senderName || params.senderName,
+      senderName: parsed.senderName || params.senderName || 'Harsh Kumar',
       isDemoMode: false,
       aiModel: modelUsed,
     };

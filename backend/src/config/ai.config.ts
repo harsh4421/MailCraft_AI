@@ -9,9 +9,10 @@ import { GoogleGenAI } from '@google/genai';
  * Never hardcoded inside component or provider business logic.
  */
 export const GEMINI_CONFIG_FALLBACK_MODELS: string[] = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-exp',
+  'gemini-3.5-flash',
+  'gemini-3.7-flash',
+  'gemini-3.8-flash',
+  'gemini-flash-latest',
 ];
 
 interface CachedModelList {
@@ -64,8 +65,8 @@ export function extractTextFromResponse(response: any): string {
 
 /**
  * Selects the best default model according to preference ordering:
- * 1. gemini-3.8-flash (or any 3.* flash if available)
- * 2. Any other flash model (e.g. gemini-2.5-flash, gemini-2.0-flash)
+ * 1. gemini-3.5-flash (fast, highly stable)
+ * 2. gemini-3.7-flash, gemini-3.8-flash
  * 3. Any other available model
  * 4. Config fallback model
  */
@@ -74,17 +75,14 @@ export function pickDefaultGeminiModel(availableModels: string[]): string {
     return GEMINI_CONFIG_FALLBACK_MODELS[0];
   }
 
-  // 1. Preference for gemini-3.8-flash or any 3.x flash
-  const gemini3Flash = availableModels.find((m) => /^gemini-3(\.\d+)?-flash/i.test(m));
-  if (gemini3Flash) return gemini3Flash;
-
-  // 2. Specific preferred stable flash models in descending generation order
+  // 1. Specific preferred models in descending generation order
   const PREFERRED_ORDER = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-latest',
+    'gemini-3.5-flash',
+    'gemini-3.7-flash',
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-flash-latest',
+    'gemini-3.1-flash-lite',
   ];
   for (const preferred of PREFERRED_ORDER) {
     const match = availableModels.find((m) => m.toLowerCase() === preferred.toLowerCase());

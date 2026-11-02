@@ -10,6 +10,8 @@ import { OpenAIProvider } from './openaiProvider';
 import { GeminiProvider } from './geminiProvider';
 import { DemoAIProvider } from './demoProvider';
 import { decryptApiKey } from '../../utils/encryption';
+import { detectPurposeContextConflict } from '../../utils/conflictDetector';
+import { validateAndRepairDraft } from '../../utils/outputValidator';
 import prisma from '../../config/prisma';
 
 export class AIService {
@@ -74,8 +76,8 @@ export class AIService {
       }
     }
 
-    // 2. Check environment variables
-    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 5) {
+    // 2. Check environment variables (in test runner, rely on configured user settings or deterministic demoProvider)
+    if (process.env.NODE_ENV !== 'test' && process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim().length > 5) {
       const gemini = new GeminiProvider(process.env.GEMINI_API_KEY);
       if (gemini.isAvailable()) {
         return { provider: gemini, isDemo: false, modelName: 'Google Gemini (Live API)' };
@@ -84,7 +86,9 @@ export class AIService {
 
     if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim().length > 5) {
       const groq = new OpenAIProvider(process.env.GROQ_API_KEY, 'llama-3.3-70b-versatile');
-      return { provider: groq, isDemo: false, modelName: 'Groq (Llama 3.3 70B)' };
+      if (groq.isAvailable()) {
+        return { provider: groq, isDemo: false, modelName: 'Groq (Llama 3.3 70B)' };
+      }
     }
 
     if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim().length > 5) {
@@ -124,28 +128,70 @@ export class AIService {
 
   public async draftEmail(params: DraftEmailParams, userId?: string): Promise<DraftEmailResult> {
     const { provider, isDemo, modelName } = await this.getProviderForUser(userId);
+
+    // 1. Conflict Check: Purpose - Context Discrepancy
+    const conflict = detectPurposeContextConflict({
+      purpose: params.purpose,
+      context: params.context,
+      confirmedPurpose: params.confirmedPurpose,
+    });
+
+    if (conflict) {
+      return {
+        subject: '',
+        greeting: '',
+        body: '',
+        closing: '',
+        senderName: params.senderName || 'Harsh Kumar',
+        isDemoMode: isDemo,
+        aiModel: modelName,
+        ...conflict,
+      };
+    }
+
+    // 2. Execute Provider with Honest Failure Reporting
     try {
       const result = await provider.draftEmail(params);
+
+      // If provider explicitly returned clarification, pass it through
+      if (result.needsClarification) {
+        return result;
+      }
+
+      // 3. Output Validation & Bounded Repair
+      const validated = validateAndRepairDraft(result, params.senderName);
       return {
-        ...result,
+        ...validated.repairedResult,
+        isDemoMode: isDemo,
         aiModel: result.aiModel || modelName,
       };
     } catch (error: any) {
-      console.warn(`[AIService] Provider ${modelName} failed (${error.message}). Falling back to Demo Engine.`);
-      const result = await this.demoProvider.draftEmail(params);
-      return {
-        ...result,
-        aiModel: `Fallback Demo Engine (Reason: ${error.message || 'API Unavailable'})`,
-      };
+      // If user had a custom configured live key that failed, do NOT silently mask the failure!
+      if (!isDemo) {
+        console.error(`[AIService] Live Provider ${modelName} failed:`, error.message);
+        throw new Error(
+          `[${modelName}] API Error: ${error.message || 'Service Unavailable'}. Please verify your API key in Settings or switch to Demo Mode.`
+        );
+      }
+      throw error;
     }
   }
 
   public async refineEmail(params: RefineEmailParams, userId?: string): Promise<DraftEmailResult> {
-    const { provider } = await this.getProviderForUser(userId);
+    const { provider, isDemo, modelName } = await this.getProviderForUser(userId);
     try {
-      return await provider.refineEmail(params);
+      const refined = await provider.refineEmail(params);
+      const validated = validateAndRepairDraft(refined, params.currentDraft.senderName);
+      return {
+        ...validated.repairedResult,
+        isDemoMode: isDemo,
+        aiModel: refined.aiModel || modelName,
+      };
     } catch (error: any) {
-      console.warn(`[AIService] Refine failed. Falling back to Demo Engine:`, error.message);
+      if (!isDemo) {
+        console.error(`[AIService] Live Refine Provider ${modelName} failed:`, error.message);
+        throw new Error(`[${modelName}] Refinement failed: ${error.message}`);
+      }
       return await this.demoProvider.refineEmail(params);
     }
   }
@@ -156,17 +202,18 @@ export class AIService {
       const result = await provider.reviewEmail(params);
       return {
         ...result,
+        isDemoMode: isDemo,
         aiModel: result.aiModel || modelName,
       };
     } catch (error: any) {
-      console.warn(`[AIService] Review provider failed (${error.message}). Falling back to Demo Engine.`);
-      const result = await this.demoProvider.reviewEmail(params);
-      return {
-        ...result,
-        aiModel: `Fallback Demo Engine (Reason: ${error.message || 'API Unavailable'})`,
-      };
+      if (!isDemo) {
+        console.error(`[AIService] Live Review Provider ${modelName} failed:`, error.message);
+        throw new Error(`[${modelName}] Review failed: ${error.message}`);
+      }
+      return await this.demoProvider.reviewEmail(params);
     }
   }
 }
 
 export const aiService = new AIService();
+

@@ -18,11 +18,11 @@ export const HelpPage: React.FC = () => {
   const faqs = [
     {
       q: 'What is MailCraft AI?',
-      a: 'MailCraft AI is an intelligent full-stack email productivity platform built by Harsh Kumar. It provides two core tools: an AI Email Drafting workspace that generates context-tailored emails, and an AI Email Review workspace that audits existing emails across Grammar, Professionalism, Context, Tone, and Clarity.',
+      a: 'MailCraft AI is an intelligent email productivity platform that provides two core tools: an Email Drafting workspace that generates context-tailored emails, and an Email Review workspace that audits existing emails across Grammar, Professionalism, Context, Tone, and Clarity.',
     },
     {
-      q: 'How does Demo Mode work? Do I need an OpenAI API key?',
-      a: 'No API key is required to use MailCraft AI! The application includes a sophisticated built-in deterministic NLP engine that performs real grammatical, tone, and contextual checks locally. If you wish to use live OpenAI GPT-4o-mini models, you can optionally supply your key in Settings.',
+      q: 'How does Demo Mode work? Do I need an API key?',
+      a: 'No API key is required to use MailCraft AI. The application includes a built-in deterministic NLP engine that performs real grammatical, tone, and contextual checks locally. If you wish to use live cloud AI models (Google Gemini, Groq, or OpenAI), you can supply your API key in Settings.',
     },
     {
       q: 'How does the Email Review calculate quality scores?',

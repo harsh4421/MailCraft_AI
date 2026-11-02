@@ -12,10 +12,10 @@ export const RegisterPage: React.FC = () => {
   const { register } = useAuth();
   const toast = useToast();
 
-  const [fullName, setFullName] = useState('Harsh Kumar');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [jobTitle, setJobTitle] = useState('Software Engineering Student');
+  const [jobTitle, setJobTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -83,7 +83,7 @@ export const RegisterPage: React.FC = () => {
                 label="Full Name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. Harsh Kumar"
+                placeholder="e.g. Alex Morgan"
                 icon={<User className="w-4 h-4" />}
                 error={errors.fullName}
                 required

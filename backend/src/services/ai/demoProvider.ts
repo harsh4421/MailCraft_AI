@@ -7,116 +7,173 @@ import {
   ReviewEmailResult,
   IdentifiedMistake,
 } from './aiProvider.interface';
+import { extractContextFacts } from '../../utils/languageCleaner';
+import { detectPurposeContextConflict } from '../../utils/conflictDetector';
+import { validateAndRepairDraft } from '../../utils/outputValidator';
 
 export class DemoAIProvider implements IAIProvider {
-  public name = 'MailCraft Deterministic NLP Demo Engine';
+  public name = 'MailCraft Deterministic Engine';
 
   public isAvailable(): boolean {
-    return true; // Always available as local fallback
+    return true; // Always available as local deterministic fallback
   }
 
   public async draftEmail(params: DraftEmailParams): Promise<DraftEmailResult> {
-    const { recipient, purpose, context, tone, length, senderName, additionalInstructions } = params;
+    const { recipient, purpose, context, tone, length, senderName, additionalInstructions, confirmedPurpose } = params;
+    const effectiveSender = senderName?.trim() || 'Harsh Kumar';
 
-    // Build greeting based on recipient and tone
-    let greeting = 'Hello,';
+    // 1. Conflict Check: Purpose vs Context Discrepancy
+    const conflict = detectPurposeContextConflict({
+      purpose,
+      context,
+      confirmedPurpose,
+    });
+
+    if (conflict) {
+      return {
+        subject: '',
+        greeting: '',
+        body: '',
+        closing: '',
+        senderName: effectiveSender,
+        isDemoMode: true,
+        aiModel: this.name,
+        ...conflict,
+      };
+    }
+
+    // 2. Language Normalization & Fact Extraction
+    const facts = extractContextFacts(context);
+    const effectivePurpose = confirmedPurpose || purpose;
+    const purpLower = effectivePurpose.toLowerCase();
     const recLower = recipient.toLowerCase();
-    if (recLower.includes('professor') || recLower.includes('teacher')) {
-      greeting = tone === 'Friendly' ? 'Dear Professor,' : 'Dear Professor [Last Name],';
-    } else if (recLower.includes('manager') || recLower.includes('boss')) {
-      greeting = tone === 'Friendly' ? 'Hi [Manager Name],' : 'Dear [Manager Name],';
-    } else if (recLower.includes('hr') || recLower.includes('hiring')) {
-      greeting = 'Dear Hiring Manager / HR Team,';
+
+    // 3. Build Greeting (Eliminate all bracketed placeholders)
+    let greeting = 'Hello,';
+    if (recLower.includes('professor') || recLower.includes('teacher') || recLower.includes('faculty')) {
+      greeting = 'Dear Professor,';
+    } else if (recLower.includes('manager') || recLower.includes('lead') || recLower.includes('boss')) {
+      greeting = tone === 'Friendly' ? 'Hi,' : 'Dear Manager,';
+    } else if (recLower.includes('hr') || recLower.includes('hiring') || recLower.includes('recruiter')) {
+      greeting = 'Dear Hiring Manager,';
     } else if (recLower.includes('client') || recLower.includes('customer')) {
-      greeting = tone === 'Formal' ? 'Dear Valued Client,' : 'Hello [Client Name],';
+      greeting = tone === 'Formal' ? 'Dear Valued Client,' : 'Hello,';
     } else if (recLower.includes('friend')) {
-      greeting = 'Hey [Name],';
+      greeting = 'Hey,';
     } else {
       greeting = tone === 'Formal' ? `Dear ${recipient},` : `Hi ${recipient},`;
     }
 
-    // Build subject line based on purpose
-    let subject = `${purpose} - ${senderName || 'Update'}`;
-    const purpLower = purpose.toLowerCase();
+    // 4. Adapt Email Structure strictly according to the Purpose
+    let subject = `${effectivePurpose} - ${effectiveSender}`;
+    const bodyParagraphs: string[] = [];
+
     if (purpLower.includes('leave')) {
-      subject = `Leave Request: ${senderName || '[Your Name]'} - [Specific Dates]`;
+      // Leave Request
+      if (facts.durationDays === 2 || facts.duration === 'two days') {
+        subject = 'Request for Two Days of Leave';
+      } else if (facts.duration) {
+        subject = `Request for ${facts.duration.charAt(0).toUpperCase() + facts.duration.slice(1)} of Leave`;
+      } else {
+        subject = `Leave Request - ${effectiveSender}`;
+      }
+
+      const absenceStatement = facts.hasAbsence
+        ? facts.cleanText
+        : facts.duration
+        ? `I am unwell and will be unable to attend for ${facts.duration}.`
+        : `I am unwell and will be unable to attend classes.`;
+
+      bodyParagraphs.push(
+        `${absenceStatement} I would appreciate your approval for this absence.`
+      );
+      bodyParagraphs.push('Thank you for your understanding.');
+
     } else if (purpLower.includes('extension') || purpLower.includes('assignment')) {
-      subject = `Request for Assignment Deadline Extension - [Course Name] - ${senderName || '[Your Name]'}`;
+      // Extension Request
+      subject = `Request for Assignment Deadline Extension - ${effectiveSender}`;
+
+      if (facts.hasAbsence) {
+        bodyParagraphs.push(
+          `${facts.cleanText} Due to this illness and absence, I would like to respectfully request a brief extension on my upcoming assignment.`
+        );
+      } else {
+        bodyParagraphs.push(
+          `I am writing to respectfully request an extension on the upcoming assignment deadline.`
+        );
+      }
+
+      if (length === 'Detailed') {
+        bodyParagraphs.push(
+          `I am working diligently to complete the requirements and would greatly appreciate your guidance on a revised submission schedule.`
+        );
+      }
+
+      bodyParagraphs.push('Thank you for your consideration and understanding.');
+
     } else if (purpLower.includes('job') || purpLower.includes('application')) {
-      subject = `Application for [Job Position] - ${senderName || '[Your Name]'}`;
+      // Job Application
+      subject = `Job Application - ${effectiveSender}`;
+      bodyParagraphs.push(
+        `I am writing to express my strong interest in the opportunity at your organization.`
+      );
+      if (facts.cleanText) {
+        bodyParagraphs.push(facts.cleanText);
+      }
+      bodyParagraphs.push(
+        `I would welcome the opportunity to discuss my background and how my skills align with your team. Thank you for your time and consideration.`
+      );
+
     } else if (purpLower.includes('meeting')) {
-      subject = `Meeting Request: Discussion regarding [Topic] - ${senderName || '[Your Name]'}`;
-    } else if (purpLower.includes('follow-up') || purpLower.includes('follow up')) {
-      subject = `Follow-Up: [Project/Discussion Name] - Quick Update`;
+      // Meeting Request
+      subject = `Meeting Request - ${effectiveSender}`;
+      bodyParagraphs.push(
+        `I am writing to request a brief meeting at your convenience to discuss our ongoing collaboration.`
+      );
+      if (facts.cleanText) {
+        bodyParagraphs.push(facts.cleanText);
+      }
+      bodyParagraphs.push(
+        `Please let me know if you have any availability for a 15–20 minute discussion. Thank you for your time.`
+      );
+
     } else if (purpLower.includes('apology')) {
-      subject = `Sincere Apologies regarding [Issue/Delay]`;
-    } else if (purpLower.includes('thank')) {
-      subject = `Heartfelt Thank You - [Occasion/Meeting]`;
-    } else if (purpLower.includes('proposal')) {
-      subject = `Business Proposal: Strategic Collaboration Opportunity`;
-    }
+      // Apology
+      subject = `Sincere Apology - ${effectiveSender}`;
+      bodyParagraphs.push(
+        `I am writing to sincerely apologize for the inconvenience caused regarding this matter.`
+      );
+      if (facts.cleanText) {
+        bodyParagraphs.push(facts.cleanText);
+      }
+      bodyParagraphs.push(
+        `Thank you for your patience and understanding.`
+      );
 
-    // Craft body based on tone and length
-    const cleanContext = context.trim();
-    let bodyParagraphs: string[] = [];
+    } else if (purpLower.includes('follow')) {
+      // Follow-up
+      subject = `Follow-Up: Discussion Update - ${effectiveSender}`;
+      bodyParagraphs.push(
+        `I am following up regarding our previous discussion.`
+      );
+      if (facts.cleanText) {
+        bodyParagraphs.push(facts.cleanText);
+      }
+      bodyParagraphs.push(
+        `Please let me know if you need any additional details.`
+      );
 
-    // Opening hook
-    if (tone === 'Formal' || tone === 'Professional') {
-      bodyParagraphs.push(
-        `I hope this email finds you well. I am writing to formally communicate regarding ${purpose.toLowerCase()}.`
-      );
-    } else if (tone === 'Friendly') {
-      bodyParagraphs.push(
-        `Hope you're having a productive week! Reaching out to touch base with you concerning ${purpose.toLowerCase()}.`
-      );
-    } else if (tone === 'Persuasive' || tone === 'Confident') {
-      bodyParagraphs.push(
-        `I am writing to present a key update regarding ${purpose.toLowerCase()} and discuss high-impact next steps.`
-      );
-    } else if (tone === 'Apologetic') {
-      bodyParagraphs.push(
-        `I am writing to address the matter regarding ${purpose.toLowerCase()} and sincerely apologize for any inconvenience caused.`
-      );
     } else {
+      // General Professional Request
+      subject = `${effectivePurpose} - ${effectiveSender}`;
       bodyParagraphs.push(
-        `I am writing to inform you regarding ${purpose.toLowerCase()}.`
+        `I am writing to communicate regarding ${effectivePurpose.toLowerCase()}.`
       );
-    }
-
-    // Core context paragraph
-    if (cleanContext) {
+      if (facts.cleanText) {
+        bodyParagraphs.push(facts.cleanText);
+      }
       bodyParagraphs.push(
-        `To provide the relevant context: ${cleanContext}`
-      );
-    } else {
-      bodyParagraphs.push(
-        `Specifically, I would like to review the necessary details with you at your earliest convenience to ensure our alignment.`
-      );
-    }
-
-    // Elaboration if medium or detailed
-    if (length === 'Detailed') {
-      bodyParagraphs.push(
-        `Key points for your review:\n• Timelines & Deliverables: Proceeding as planned, subject to your feedback.\n• Action Required: Please let me know your thoughts or preferred adjustments.\n• Availability: I am available for a brief discussion should you require any additional clarification.`
-      );
-    } else if (length === 'Medium') {
-      bodyParagraphs.push(
-        `I have carefully prepared the prerequisites and would welcome the opportunity to discuss any feedback or questions you might have.`
-      );
-    }
-
-    // Call to action / closing line
-    if (purpLower.includes('meeting') || purpLower.includes('interview')) {
-      bodyParagraphs.push(
-        `Please let me know if you have 15-20 minutes open on your calendar this week. I am happy to accommodate your schedule.`
-      );
-    } else if (purpLower.includes('extension') || purpLower.includes('leave')) {
-      bodyParagraphs.push(
-        `Thank you very much for your understanding and consideration regarding this request. I will ensure all pending matters remain organized.`
-      );
-    } else {
-      bodyParagraphs.push(
-        `Thank you for your time and guidance. I look forward to hearing your perspective.`
+        `Thank you for your time and consideration.`
       );
     }
 
@@ -124,11 +181,9 @@ export class DemoAIProvider implements IAIProvider {
       bodyParagraphs.push(`Note: ${additionalInstructions.trim()}`);
     }
 
-    // Appropriate closing
-    let closing = 'Warm regards,';
-    if (tone === 'Formal') {
-      closing = 'Sincerely,';
-    } else if (tone === 'Friendly') {
+    // 5. Appropriate Closing
+    let closing = 'Sincerely,';
+    if (tone === 'Friendly') {
       closing = 'Best regards,';
     } else if (tone === 'Apologetic') {
       closing = 'With sincere apologies,';
@@ -136,15 +191,19 @@ export class DemoAIProvider implements IAIProvider {
       closing = 'Respectfully yours,';
     }
 
-    return {
+    const rawDraft: DraftEmailResult = {
       subject,
       greeting,
       body: bodyParagraphs.join('\n\n'),
       closing,
-      senderName: senderName || '[Your Name]',
+      senderName: effectiveSender,
       isDemoMode: true,
-      aiModel: 'MailCraft NLP Engine (Demo Mode)',
+      aiModel: this.name,
     };
+
+    // 6. Validate and Apply Bounded Repairs
+    const validated = validateAndRepairDraft(rawDraft, effectiveSender);
+    return validated.repairedResult;
   }
 
   public async refineEmail(params: RefineEmailParams): Promise<DraftEmailResult> {
@@ -376,7 +435,15 @@ export class DemoAIProvider implements IAIProvider {
     );
 
     // Build An Eloquent, Fully Improved Rewritten Email
-    let salutation = isAcademicOrCorporate ? `Dear ${recipient},` : `Hi ${recipient},`;
+    let salutation = 'Hello,';
+    if (recLower.includes('professor') || recLower.includes('teacher')) {
+      salutation = 'Dear Professor,';
+    } else if (isAcademicOrCorporate) {
+      salutation = `Dear ${recipient},`;
+    } else {
+      salutation = `Hi ${recipient},`;
+    }
+
     let opening = desiredTone === 'Friendly' 
       ? `I hope you're having a wonderful week.` 
       : `I hope this email finds you well.`;
@@ -433,7 +500,7 @@ export class DemoAIProvider implements IAIProvider {
       suggestions,
       improvedEmail,
       isDemoMode: true,
-      aiModel: 'MailCraft NLP Review Engine (Demo Mode)',
+      aiModel: 'MailCraft Deterministic Review Engine (Demo Mode)',
     };
   }
 }

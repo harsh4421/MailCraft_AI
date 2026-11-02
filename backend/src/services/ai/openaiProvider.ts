@@ -44,13 +44,24 @@ export class OpenAIProvider implements IAIProvider {
       throw new Error('OpenAI client is not configured.');
     }
 
+    const effectivePurpose = params.confirmedPurpose || params.purpose;
     const systemPrompt = `You are an elite executive communications expert and professional email writing assistant for MailCraft AI.
 Draft an exceptional email matching the user's specific recipient, purpose, context, and tone.
-Rules:
-- Respect the requested recipient and tone strictly.
-- Never fabricate dates, commitments, or facts not provided in the context.
-- Keep the language natural, concise, and professional.
-- Return ONLY valid JSON in the exact structure specified below.
+
+Strict Rules:
+1. Language Correction & Fact Preservation:
+   - Automatically transform broken English, typos, shorthand, and Hinglish in the context into clear, grammatically correct professional email language (e.g. "i unwelll not able to come twoo dyss" -> "I am unwell and will be unable to attend for two days.").
+   - NEVER copy malformed or misspelled context verbatim into the final email.
+   - Faithfully preserve all supplied facts, dates, names, and numbers.
+   - NEVER invent unmentioned facts, diagnoses, specific dates, doctor notes, attachments, completion percentages, or unsupported commitments.
+2. Eliminate Unresolved Placeholders:
+   - NEVER emit bracketed placeholders such as [Course Name], [Last Name], [Your Name], [Specific Dates], or [Topic].
+   - If a professor's name is not specified, use "Dear Professor,".
+   - If a course name is optional or unspecified, omit it cleanly.
+3. Purpose-Adaptive Organization:
+   - Structure the email body strictly for the intended purpose (e.g. leave request: absence statement, duration, approval request; extension request: reason for absence, extension request).
+   - Do NOT force generic canned paragraphs into the email (NEVER add "I have carefully prepared the prerequisites", "I will ensure all pending matters remain organized", or "I hope this email finds you well" to simple leave or extension notes).
+4. Return ONLY valid JSON in the exact structure specified below.
 
 JSON Format:
 {
@@ -63,11 +74,11 @@ JSON Format:
 
     const userPrompt = `Generate an email with these parameters:
 Recipient: ${params.recipient}
-Purpose: ${params.purpose}
+Purpose: ${effectivePurpose}
 Context & Key Details: ${params.context}
 Tone: ${params.tone}
 Length: ${params.length}
-Sender Name: ${params.senderName || '[Your Name]'}
+Sender Name: ${params.senderName || 'Harsh Kumar'}
 Additional Instructions: ${params.additionalInstructions || 'None'}`;
 
     const response = await this.client.chat.completions.create({
@@ -87,11 +98,11 @@ Additional Instructions: ${params.additionalInstructions || 'None'}`;
 
     const parsed = JSON.parse(content);
     return {
-      subject: parsed.subject || 'Follow-Up',
-      greeting: parsed.greeting || 'Hello,',
+      subject: parsed.subject || `${effectivePurpose} - ${params.senderName || 'Harsh Kumar'}`,
+      greeting: parsed.greeting || (params.recipient.toLowerCase().includes('prof') ? 'Dear Professor,' : 'Hello,'),
       body: parsed.body || '',
       closing: parsed.closing || 'Sincerely,',
-      senderName: parsed.senderName || params.senderName,
+      senderName: parsed.senderName || params.senderName || 'Harsh Kumar',
       isDemoMode: false,
       aiModel: this.model,
     };

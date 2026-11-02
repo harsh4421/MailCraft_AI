@@ -25,8 +25,15 @@ export interface DraftEmailParams {
   context: string;
   tone: string;
   length: 'Short' | 'Medium' | 'Detailed' | string;
-  senderName: string;
+  senderName?: string;
   additionalInstructions?: string;
+  confirmedPurpose?: string;
+}
+
+export interface ClarificationOption {
+  label: string;
+  purpose: string;
+  description?: string;
 }
 
 export interface DraftEmailResult {
@@ -38,12 +45,22 @@ export interface DraftEmailResult {
   generationId?: string | null;
   isDemoMode: boolean;
   aiModel: string;
+  needsClarification?: boolean;
+  clarificationMessage?: string;
+  clarificationOptions?: ClarificationOption[];
+  conflictDetected?: {
+    contextSummary: string;
+    detectedIntent: string;
+    selectedPurpose: string;
+  };
 }
 
 export interface IdentifiedMistake {
   id: string;
   type: 'grammar' | 'spelling' | 'punctuation' | 'professionalism' | 'context' | 'tone' | 'clarity';
+  category?: string;
   original: string;
+  originalText?: string;
   suggestion: string;
   explanation: string;
   severity: 'low' | 'medium' | 'high';
@@ -76,9 +93,18 @@ export interface ReviewEmailResult {
   toneScore: number;
   clarityScore: number;
   criteriaScores?: ReviewCriteriaScores;
+  breakdown?: {
+    grammar: number;
+    professionalism: number;
+    context: number;
+    tone: number;
+    clarity: number;
+  };
   detectedTone: string;
   identifiedMistakes: IdentifiedMistake[];
+  mistakes?: IdentifiedMistake[];
   suggestions: string[];
+  summary?: string;
   improvedEmail: string;
   isDemoMode: boolean;
   aiModel: string;

@@ -6,6 +6,7 @@ export interface DraftEmailParams {
   length: 'Short' | 'Medium' | 'Detailed' | string;
   senderName: string;
   additionalInstructions?: string;
+  confirmedPurpose?: string;
 }
 
 export interface RefineEmailParams {
@@ -29,6 +30,19 @@ export interface DraftEmailResult {
   senderName: string;
   isDemoMode: boolean;
   aiModel: string;
+  generationId?: string | null;
+  needsClarification?: boolean;
+  clarificationMessage?: string;
+  clarificationOptions?: Array<{
+    label: string;
+    purpose: string;
+    description?: string;
+  }>;
+  conflictDetected?: {
+    contextSummary: string;
+    detectedIntent: string;
+    selectedPurpose: string;
+  };
 }
 
 export interface IdentifiedMistake {

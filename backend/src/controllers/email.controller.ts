@@ -10,6 +10,7 @@ export const draftSchema = z.object({
   length: z.enum(['Short', 'Medium', 'Detailed']).default('Medium'),
   senderName: z.string().default('Harsh Kumar'),
   additionalInstructions: z.string().optional(),
+  confirmedPurpose: z.string().optional(),
 });
 
 export const refineSchema = z.object({

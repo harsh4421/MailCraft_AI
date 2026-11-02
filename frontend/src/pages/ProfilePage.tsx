@@ -11,9 +11,9 @@ export const ProfilePage: React.FC = () => {
   const { user, updateUser } = useAuth();
   const toast = useToast();
 
-  const [fullName, setFullName] = useState(user?.fullName || 'Harsh Kumar');
-  const [jobTitle, setJobTitle] = useState(user?.jobTitle || 'Computer Science Student');
-  const [defaultSenderName, setDefaultSenderName] = useState(user?.defaultSenderName || user?.fullName || 'Harsh Kumar');
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [jobTitle, setJobTitle] = useState(user?.jobTitle || '');
+  const [defaultSenderName, setDefaultSenderName] = useState(user?.defaultSenderName || user?.fullName || '');
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Password fields

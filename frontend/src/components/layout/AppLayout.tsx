@@ -1,44 +1,51 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Sidebar } from './Sidebar';
 import { Menu, Sun, Moon, PenTool, CheckCheck } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { SidebarProvider, useSidebar } from '../../context/SidebarContext';
 import { Button } from '../ui/Button';
 
-export const AppLayout: React.FC = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+const AppLayoutInner: React.FC = () => {
+  const { isCollapsed, openMobile, isMobileOpen } = useSidebar();
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const location = useLocation();
 
   const getPageTitle = (pathname: string) => {
-    if (pathname.startsWith('/dashboard')) return 'Dashboard Overview';
-    if (pathname.startsWith('/draft')) return 'AI Email Drafting Assistant';
-    if (pathname.startsWith('/review')) return 'AI Email Review & Quality Analysis';
-    if (pathname.startsWith('/drafts')) return 'Saved Email Drafts';
-    if (pathname.startsWith('/history')) return 'Email History & Logs';
-    if (pathname.startsWith('/profile')) return 'User Profile';
-    if (pathname.startsWith('/settings')) return 'Preferences & AI Settings';
-    if (pathname.includes('/about')) return 'About MailCraft AI';
-    if (pathname.includes('/help')) return 'Help Center & Documentation';
+    if (pathname.startsWith('/dashboard')) return 'Dashboard';
+    if (pathname.startsWith('/draft')) return 'Draft Email';
+    if (pathname.startsWith('/review')) return 'Review Email';
+    if (pathname.startsWith('/drafts')) return 'Saved Drafts';
+    if (pathname.startsWith('/history')) return 'History';
+    if (pathname.startsWith('/profile')) return 'Profile';
+    if (pathname.startsWith('/settings')) return 'Settings';
+    if (pathname.includes('/about')) return 'About Project';
+    if (pathname.includes('/help')) return 'Help & Documentation';
     return 'MailCraft AI';
   };
 
   return (
     <div className="min-h-screen bg-surface-soft dark:bg-surface-dark flex">
       {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar />
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-[padding] duration-300 ease-in-out ${
+          isCollapsed ? 'lg:pl-[72px]' : 'lg:pl-60'
+        }`}
+      >
         {/* Top Header Bar */}
         <header className="sticky top-0 z-30 h-16 glass-header px-4 sm:px-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-              aria-label="Open sidebar"
+              onClick={openMobile}
+              className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Open sidebar navigation"
+              aria-expanded={isMobileOpen}
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -72,19 +79,35 @@ export const AppLayout: React.FC = () => {
             </button>
 
             {/* User Avatar */}
-            <Link to="/profile" className="flex items-center gap-2 pl-1">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-accent-light text-white font-bold text-xs flex items-center justify-center shadow-sm">
+            <Link to="/profile" className="flex items-center gap-2 pl-1" title="User Profile">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-brand-600 to-accent-light text-white font-bold text-xs flex items-center justify-center shadow-sm hover:scale-105 transition-transform">
                 {user?.fullName?.charAt(0) || 'U'}
               </div>
             </Link>
           </div>
         </header>
 
-        {/* Page Content */}
+        {/* Page Content with restrained route fade */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          <Outlet />
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="w-full"
+          >
+            <Outlet />
+          </motion.div>
         </main>
       </div>
     </div>
+  );
+};
+
+export const AppLayout: React.FC = () => {
+  return (
+    <SidebarProvider>
+      <AppLayoutInner />
+    </SidebarProvider>
   );
 };
